@@ -1,4 +1,5 @@
 {
+  "ignorePatterns": ["**/skills"],
   "semi": false,
   "singleQuote": true,
   "sortImports": {}

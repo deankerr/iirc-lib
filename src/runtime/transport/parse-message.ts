@@ -147,4 +147,3 @@ function unescapeTagValue(value: string): string {
 
   return result
 }
-

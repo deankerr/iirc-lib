@@ -12,3 +12,8 @@ IRC client library. Protocol parsing, connection lifecycle, state tracking, mess
 The structure in this document need not be followed to the letter, but it's generally valuable:
 
 @module-glossary.md
+
+## Comments
+
+- Document the code with comments.
+- Especially for features - add a short description, any use protocol references, list of state values read/set, events emitted, etc.

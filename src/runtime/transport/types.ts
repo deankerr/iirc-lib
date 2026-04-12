@@ -16,4 +16,3 @@ export type IrcCommand = {
   params: string[]
   trailing?: boolean
 }
-

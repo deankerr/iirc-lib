@@ -44,4 +44,3 @@ export class OutputQueue {
     this.timer = setTimeout(() => this.drain(), this.delayMs)
   }
 }
-
