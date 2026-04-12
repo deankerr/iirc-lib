@@ -1,4 +1,4 @@
-# @iirc/irc — Requirements
+# iirc-lib — Advanced Features
 
 Standalone IRC client library. Used by the iirc IRC plugin and potentially other projects. Must work independently of the iirc server architecture.
 

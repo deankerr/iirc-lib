@@ -6,8 +6,8 @@ export function createMockTransport() {
   const sentLines: string[] = []
 
   const stream = {
-    setEncoding(_enc: string) {
-      // no-op: mock doesn't need encoding
+    setEncoding(_encoding: string) {
+      // The mock always operates on strings, so there is nothing to configure.
     },
 
     on(event: string, handler: (...args: unknown[]) => void) {
@@ -17,13 +17,11 @@ export function createMockTransport() {
 
     write(data: string) {
       for (const line of data.split('\r\n')) {
-        if (line) sentLines.push(line)
+        if (line.length > 0) {
+          sentLines.push(line)
+        }
       }
       return true
-    },
-
-    end() {
-      // no-op: mock doesn't need cleanup
     },
   }
 
@@ -31,9 +29,9 @@ export function createMockTransport() {
     stream: stream as unknown as Duplex,
     sentLines,
 
-    receive(lines: string | string[]) {
-      const arr = Array.isArray(lines) ? lines : [lines]
-      for (const line of arr) {
+    receive(lines: string | readonly string[]) {
+      const batch = Array.isArray(lines) ? lines : [lines]
+      for (const line of batch) {
         emitter.emit('data', `${line}\r\n`)
       }
     },
@@ -42,8 +40,9 @@ export function createMockTransport() {
       emitter.emit('close')
     },
 
-    error(err: Error) {
-      emitter.emit('error', err)
+    error(error: Error) {
+      emitter.emit('error', error)
     },
   }
 }
+

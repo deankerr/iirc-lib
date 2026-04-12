@@ -1,25 +1,4 @@
-export {
-  Client,
-  type ClientConfig,
-  type ClientStatus,
-  type ParsedMessage,
-  type Self,
-  type ServerInfo,
-} from './client/client'
-
-export {
-  createClient,
-  type CreateClientConfig,
-  type FacadeStatus,
-  type IrcClient,
-} from './client/facade'
-
-export type {
-  ChannelTracker,
-  ChannelTrackerHost,
-  ChannelState,
-  ChannelMember,
-} from './client/channels'
-
-export { Numeric } from './client/protocol/numerics'
-export type { IrcMessage } from './client/protocol/parser'
+// The package surface is intentionally tiny.
+// We can widen it later once the internal layering settles, but for now the
+// standalone library should lead with one clear way to use it.
+export { Client, type ClientConfig } from './client/client'
