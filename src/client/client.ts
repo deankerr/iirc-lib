@@ -22,8 +22,6 @@ export class Client extends EventEmitter<ClientEvents> {
 
     this.runtime = new Runtime(config)
 
-    // The public client is intentionally thin in this first slice.
-    // It owns the ergonomic surface, not the deeper behavior.
     this.runtime.on('line', (line) => this.emit('line', line))
     this.runtime.on('message', (message) => this.emit('message', message))
     this.runtime.on('registered', () => this.emit('registered'))

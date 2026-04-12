@@ -5,6 +5,14 @@ import { installBuiltinFeatures, type RuntimeFeature } from './features'
 import { TransportHarness } from './transport/transport-harness'
 import type { IrcCommand, IrcMessage } from './transport/types'
 
+export type SaslConfig = {
+  mechanism?: 'PLAIN'
+  username: string
+  password: string
+  authorizationIdentity?: string
+  required?: boolean
+}
+
 export type RuntimeConfig = {
   nick: string
   user: string
@@ -12,13 +20,7 @@ export type RuntimeConfig = {
   password?: string
   sendDelayMs?: number
   requestedCapabilities?: string[]
-  sasl?: {
-    mechanism?: 'PLAIN'
-    username: string
-    password: string
-    authorizationIdentity?: string
-    required?: boolean
-  }
+  sasl?: SaslConfig
 }
 
 export type RuntimeStatus = 'idle' | 'registering' | 'registered' | 'closed' | 'error'

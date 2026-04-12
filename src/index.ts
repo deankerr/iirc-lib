@@ -1,4 +1,6 @@
 // The package surface is intentionally tiny.
-// We can widen it later once the internal layering settles, but for now the
-// standalone library should lead with one clear way to use it.
-export { Client, type ClientConfig } from './client/client'
+// We expose only the client and the small set of types consumers naturally need
+// to write against its public API.
+export { Client, type ClientConfig, type ClientEvents } from './client/client'
+export type { IrcMessage, IrcTags } from './runtime/transport/types'
+export type { SaslConfig } from './runtime/runtime'
