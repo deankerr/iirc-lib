@@ -12,6 +12,18 @@ IRC client library. Protocol parsing, connection lifecycle, state tracking, mess
 - Document the code with comments.
 - Especially for features - add a short description, any use protocol references, list of state values read/set, events emitted, etc.
 
+## Design Goals
+
+- Prioritise high-quality, deliberate API design over matching existing library conventions.
+- Favour a small number of strong primitives that compose well, rather than a wide surface of convenience APIs.
+- Keep the library buffer-centric: consistently label which channel, query, server, or status area an event belongs to.
+- Maintain one canonical event stream rather than emitting a different event type for each IRC command or numeric.
+- Preserve raw protocol fidelity while layering derived context and enrichment on top; enrichment should add clarity, not hide wire data.
+- Avoid sprawling command-helper APIs on the client object; command I/O should stay centered on a small, typed, general mechanism.
+- Design for real client applications, not just toy bots or happy-path scripts.
+- Prefer interfaces that reduce branching and duplicate parsing work in consumers.
+- Treat the design as iterative. Aim for tasteful, well-thought-out abstractions and be willing to refine shapes over time instead of locking in premature patterns.
+
 ## References
 
 The `references/` directory is .gitignored, but contains:
