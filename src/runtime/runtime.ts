@@ -27,7 +27,6 @@ export type RuntimeStatus = 'idle' | 'registering' | 'registered' | 'closed' | '
 
 export type RuntimeEvents = {
   attach: [stream: Duplex]
-  line: [string]
   message: [IrcMessage]
   registered: []
   close: []
@@ -48,7 +47,6 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     this.harness = new TransportHarness({ sendDelayMs: config.sendDelayMs })
     this.status = 'idle'
 
-    this.harness.on('line', (line) => this.emit('line', line))
     this.harness.on('message', (message) => this.emit('message', message))
     this.harness.on('close', () => this.handleClose())
     this.harness.on('error', (error) => this.handleError(error))

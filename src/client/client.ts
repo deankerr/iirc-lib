@@ -7,7 +7,6 @@ import type { IrcMessage } from '../runtime/transport/types'
 export type ClientConfig = RuntimeConfig
 
 export type ClientEvents = {
-  line: [string]
   message: [IrcMessage]
   registered: []
   close: []
@@ -22,7 +21,6 @@ export class Client extends EventEmitter<ClientEvents> {
 
     this.runtime = new Runtime(config)
 
-    this.runtime.on('line', (line) => this.emit('line', line))
     this.runtime.on('message', (message) => this.emit('message', message))
     this.runtime.on('registered', () => this.emit('registered'))
     this.runtime.on('close', () => this.emit('close'))
