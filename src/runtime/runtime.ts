@@ -1,9 +1,10 @@
 import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 
-import { installBuiltinFeatures, type RuntimeFeature } from './features'
-import { TransportHarness } from './transport/transport-harness'
-import type { IrcCommand, IrcMessage } from './transport/types'
+import { builtinRuntimeFeatures } from './features'
+import { Numeric } from './numerics'
+import { TransportHarness } from './transport'
+import type { IrcCommand, IrcMessage } from './transport'
 
 export type SaslConfig = {
   mechanism?: 'PLAIN'
@@ -33,17 +34,46 @@ export type RuntimeEvents = {
   error: [Error]
 }
 
+export type ConnectionState = {
+  user: string
+  realname: string
+  registered: boolean
+  nick: string
+  host?: string
+  serverHost?: string
+  serverVersion?: string
+  account?: string
+}
+
+export type IsupportValue = string | true
+
+export type ParsedSource = {
+  nick?: string
+  user?: string
+  host?: string
+}
+
 export class Runtime extends EventEmitter<RuntimeEvents> {
   status: RuntimeStatus
+  readonly numerics = Numeric
 
   private readonly harness: TransportHarness
   private readonly config: RuntimeConfig
-  private readonly sharedState = new Map<string, unknown>()
+
+  connectionState: ConnectionState
+  isupport = new Map<string, IsupportValue>()
 
   constructor(config: RuntimeConfig) {
     super()
 
     this.config = config
+    this.connectionState = {
+      nick: config.nick,
+      realname: config.realname,
+      registered: false,
+      user: config.user,
+    }
+
     this.harness = new TransportHarness({ sendDelayMs: config.sendDelayMs })
     this.status = 'idle'
 
@@ -51,7 +81,9 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     this.harness.on('close', () => this.handleClose())
     this.harness.on('error', (error) => this.handleError(error))
 
-    installBuiltinFeatures(this)
+    for (const feature of builtinRuntimeFeatures) {
+      feature(this)
+    }
   }
 
   attach(stream: Duplex): void {
@@ -72,27 +104,39 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     this.harness.send(command)
   }
 
+  // Fold a value using the active server CASEMAPPING when available so
+  // features and advanced consumers can compare identifiers consistently.
+  caseFold(value: string): string {
+    const caseMapping = this.isupport.get('CASEMAPPING')
+    return foldCaseMapping(value, caseMapping)
+  }
+
+  parseSource(source: string | undefined): ParsedSource | undefined {
+    if (!source) return undefined
+
+    const bangIndex = source.indexOf('!')
+    const atIndex = source.indexOf('@')
+
+    const nickEnd = bangIndex === -1 ? (atIndex === -1 ? source.length : atIndex) : bangIndex
+    const nick = nickEnd > 0 ? source.slice(0, nickEnd) : undefined
+
+    const userStart = bangIndex === -1 ? -1 : bangIndex + 1
+    const userEnd = atIndex === -1 ? source.length : atIndex
+    const user =
+      userStart === -1 || userEnd <= userStart ? undefined : source.slice(userStart, userEnd)
+
+    const host = atIndex === -1 ? undefined : source.slice(atIndex + 1) || undefined
+
+    if (!nick && !user && !host) return undefined
+    return { nick, user, host }
+  }
+
+  parseSourceNick(source: string | undefined): string | undefined {
+    return this.parseSource(source)?.nick
+  }
+
   getConfig(): Readonly<RuntimeConfig> {
     return this.config
-  }
-
-  getState<T>(key: string): T | undefined {
-    return this.sharedState.get(key) as T | undefined
-  }
-
-  setState<T>(key: string, value: T): T {
-    this.sharedState.set(key, value)
-    return value
-  }
-
-  updateState<T>(key: string, updater: (state: T | undefined) => T): T {
-    const next = updater(this.getState<T>(key))
-    this.sharedState.set(key, next)
-    return next
-  }
-
-  install(feature: RuntimeFeature): void {
-    feature(this)
   }
 
   private handleClose(): void {
@@ -103,5 +147,28 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   private handleError(error: Error): void {
     this.status = 'error'
     this.emit('error', error)
+  }
+}
+
+function foldCaseMapping(value: string, caseMapping: string | true | undefined): string {
+  const asciiFolded = value.toLowerCase()
+  if (typeof caseMapping !== 'string') {
+    return asciiFolded
+  }
+
+  switch (caseMapping.toLowerCase()) {
+    case 'rfc1459':
+      return asciiFolded
+        .replaceAll('[', '{')
+        .replaceAll(']', '}')
+        .replaceAll('\\', '|')
+        .replaceAll('~', '^')
+
+    case 'strict-rfc1459':
+      return asciiFolded.replaceAll('[', '{').replaceAll(']', '}').replaceAll('\\', '|')
+
+    case 'ascii':
+    default:
+      return asciiFolded
   }
 }

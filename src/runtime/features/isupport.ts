@@ -1,17 +1,15 @@
-import { Numeric } from '../numerics'
-import type { Runtime } from '../runtime'
-import { getIsupportState, setIsupportState, type IsupportValue } from './state'
+import type { IsupportValue, Runtime } from '../runtime'
 
-export function installIsupportFeature(runtime: Runtime): void {
+export function isupport(runtime: Runtime): void {
   runtime.on('message', (message) => {
-    if (message.command !== Numeric.RPL_ISUPPORT) return
+    if (message.command !== runtime.numerics.RPL_ISUPPORT) return
 
-    const next = new Map(getIsupportState(runtime))
+    const next = new Map(runtime.isupport)
     for (const token of message.params.slice(1, -1)) {
       applyIsupportToken(next, token)
     }
 
-    setIsupportState(runtime, next)
+    runtime.isupport = next
   })
 }
 

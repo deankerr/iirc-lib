@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 
-import { Runtime, type RuntimeConfig } from '../runtime/runtime'
-import type { IrcMessage } from '../runtime/transport/types'
+import { Runtime, type RuntimeConfig } from './runtime/runtime'
+import type { IrcMessage } from './runtime/transport/types'
 
 export type ClientConfig = RuntimeConfig
 

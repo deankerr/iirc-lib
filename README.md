@@ -66,7 +66,6 @@ Built-in runtime features currently provide:
 
 - startup registration with `CAP LS 302`, optional `PASS`, then `NICK` and `USER`
 - automatic `PING`/`PONG`
-- pre-registration nick retry on `433 ERR_NICKNAMEINUSE`
 - self/server identity tracking from `001`, `004`, and `NICK`
 - `005 RPL_ISUPPORT` token capture
 - CAP negotiation with multiline `LS` handling and `NEW`/`DEL`
@@ -74,8 +73,8 @@ Built-in runtime features currently provide:
 
 ## Capability Registry
 
-The built-in capability registry lives in
-[src/runtime/features/capability-registry.ts](/Users/dean/code/iirc-lib/src/runtime/features/capability-registry.ts).
+The built-in capability registry currently lives alongside the negotiation logic in
+[src/runtime/features/capabilities.ts](/Users/dean/code/iirc-lib/src/runtime/features/capabilities.ts).
 
 The current built-in requested capabilities are:
 
