@@ -11,7 +11,7 @@ const zStringTrim = z
   .trim()
   .transform((v) => (v === '' ? undefined : v))
 
-const clientConfigSchema = z.object({
+const runtimeInputConfigSchema = z.object({
   nick: z.string().trim(),
   user: zStringTrim.optional(),
   realname: zStringTrim.optional(),
@@ -25,7 +25,7 @@ const clientConfigSchema = z.object({
     .optional(),
 })
 
-export type ClientConfig = z.input<typeof clientConfigSchema>
+export type RuntimeInputConfig = z.input<typeof runtimeInputConfigSchema>
 
 // --- Runtime schema ---
 // Strict validation on the fully-resolved config. Catches both invalid user
@@ -53,9 +53,9 @@ export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>
 const DEFAULT_DELAYMS = 1500
 const DEFAULT_CAPABILITIES = ['message-tags']
 
-export function resolveConfig(input: ClientConfig): RuntimeConfig {
+export function resolveConfig(input: RuntimeInputConfig): RuntimeConfig {
   // Light parse: trim and normalise incoming values.
-  const parsed = clientConfigSchema.parse(input)
+  const parsed = runtimeInputConfigSchema.parse(input)
 
   // Resolve defaults that depend on other fields.
   const nick = parsed.nick

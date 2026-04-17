@@ -21,7 +21,7 @@ type MessageSplitFixture = {
 // test-data/msg-split.yaml, so future parser changes stay aligned with the
 // expected wire-level message shape.
 const fixture = Bun.YAML.parse(
-  await Bun.file(new URL('../../../test-data/msg-split.yaml', import.meta.url)).text(),
+  await Bun.file(new URL('../../test-data/msg-split.yaml', import.meta.url)).text(),
 ) as MessageSplitFixture
 
 describe('parseMessage', () => {

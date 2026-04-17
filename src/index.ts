@@ -1,3 +1,3 @@
-export { Client, type ClientConfig, type ClientEvents } from './client'
-export type { IrcMessage, IrcTags } from './runtime'
-export type { SaslConfig } from './config'
+export * from './runtime'
+export { resolveConfig } from './config'
+export type { RuntimeConfig, RuntimeInputConfig, SaslConfig } from './config'

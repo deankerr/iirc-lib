@@ -23,7 +23,7 @@ type MessageJoinFixture = {
 // by IrcCommand today. Source/tag serialization can be added later with their
 // own transport shape and fixture coverage.
 const fixture = Bun.YAML.parse(
-  await Bun.file(new URL('../../../test-data/msg-join.yaml', import.meta.url)).text(),
+  await Bun.file(new URL('../../test-data/msg-join.yaml', import.meta.url)).text(),
 ) as MessageJoinFixture
 
 describe('encodeCommand', () => {

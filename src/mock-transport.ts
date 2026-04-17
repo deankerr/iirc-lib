@@ -15,6 +15,11 @@ export function createMockTransport() {
       return this
     },
 
+    removeListener(event: string, handler: (...args: unknown[]) => void) {
+      emitter.removeListener(event, handler)
+      return this
+    },
+
     write(data: string) {
       for (const line of data.split('\r\n')) {
         if (line.length > 0) {

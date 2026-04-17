@@ -71,7 +71,7 @@ function chunkPayload(base64: string): string[] {
 }
 
 export function registration(runtime: Runtime): void {
-  const config = runtime.getConfig()
+  const config = runtime.config
   let state: State = 'collecting_ls'
   const availableCaps = new Set<string>()
 

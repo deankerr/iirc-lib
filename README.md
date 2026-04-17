@@ -15,34 +15,36 @@ bun install
 
 ```ts
 import { connect } from 'node:net'
-import { Client } from 'iirc-lib'
-
-const client = new Client({
-  nick: 'bot',
-  user: 'bot',
-  realname: 'Bot',
-  password: process.env.IRC_PASSWORD,
-  sasl: {
-    username: 'bot',
-    password: process.env.IRC_SASL_PASSWORD!,
-  },
-})
-
-client.on('registered', () => {
-  client.send('JOIN', '#dev')
-})
-
-client.on('message', (message) => {
-  console.log(message.command, message.params)
-})
+import { createRuntime } from 'iirc-lib'
 
 const stream = connect({ host: 'irc.example.com', port: 6667 })
-client.attach(stream)
+
+const runtime = createRuntime(
+  {
+    nick: 'bot',
+    user: 'bot',
+    realname: 'Bot',
+    password: process.env.IRC_PASSWORD,
+    sasl: {
+      username: 'bot',
+      password: process.env.IRC_SASL_PASSWORD!,
+    },
+  },
+  stream,
+)
+
+runtime.on('registered', () => {
+  runtime.send('JOIN', '#dev')
+})
+
+runtime.on('message', (message) => {
+  console.log(message.command, message.params)
+})
 ```
 
 ## Config
 
-`Client` currently accepts:
+`createRuntime()` currently accepts:
 
 - `nick`
 - `user`

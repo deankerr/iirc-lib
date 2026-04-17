@@ -1,11 +1,18 @@
 import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 
-import type { RuntimeConfig } from '../config'
-import { builtinRuntimeFeatures } from './features'
+import { resolveConfig, type RuntimeConfig, type RuntimeInputConfig } from './config'
+import { identity } from './features/identity'
+import { isupport } from './features/isupport'
+import { ping } from './features/ping'
+import { registration } from './features/registration'
 import { Numeric } from './numerics'
 import { Transport } from './transport'
 import type { IrcCommand, IrcMessage } from './transport'
+
+export type RuntimeFeature = (runtime: Runtime) => void
+
+const defaultRuntimeFeatures: RuntimeFeature[] = [registration, ping, identity, isupport]
 
 export type RuntimeEvents = {
   attach: [stream: Duplex]
@@ -35,14 +42,14 @@ export type ParsedSource = {
 export class Runtime extends EventEmitter<RuntimeEvents> {
   readonly numerics = Numeric
 
-  private readonly config: RuntimeConfig
-  private readonly transport: Transport
+  readonly config: RuntimeConfig
+  readonly transport: Transport
 
   readonly connectionState: ConnectionState
   readonly activeCaps = new Set<string>()
   readonly isupport = new Map<string, string | true>()
 
-  constructor(config: RuntimeConfig) {
+  constructor(config: RuntimeConfig, transport: Transport, features = defaultRuntimeFeatures) {
     super()
 
     this.config = config
@@ -53,20 +60,20 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
       user: config.user,
     }
 
-    this.transport = new Transport({ sendDelayMs: config.sendDelayMs })
+    this.transport = transport
 
     this.transport.on('message', (message) => this.emit('message', message))
     this.transport.on('close', () => this.handleClose())
     this.transport.on('error', (error) => this.handleError(error))
 
-    for (const feature of builtinRuntimeFeatures) {
+    for (const feature of features) {
       feature(this)
     }
-  }
 
-  attach(stream: Duplex): void {
-    this.transport.attach(stream)
-    this.emit('attach', stream)
+    // Keep the "attach" event name for now as the runtime startup signal.
+    // The runtime is already session-bound at this point, so this fires once
+    // when construction is complete and features are ready to run.
+    this.emit('attach', this.transport.stream)
   }
 
   send(command: string, ...params: ReadonlyArray<string | undefined>): void {
@@ -112,10 +119,6 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     return this.parseSource(source)?.nick
   }
 
-  getConfig(): Readonly<RuntimeConfig> {
-    return this.config
-  }
-
   private handleClose(): void {
     this.emit('close')
   }
@@ -155,4 +158,17 @@ function foldCaseMapping(value: string, caseMapping: string | true | undefined):
     default:
       return asciiFolded
   }
+}
+
+// Default session-construction path. This keeps the common case small while
+// still leaving the raw Runtime + Transport constructor path available for
+// consumers who want to inspect or alter the pieces directly.
+export function createRuntime(
+  input: RuntimeInputConfig,
+  stream: Duplex,
+  features = defaultRuntimeFeatures,
+): Runtime {
+  const config = resolveConfig(input)
+  const transport = new Transport(stream, { sendDelayMs: config.sendDelayMs })
+  return new Runtime(config, transport, features)
 }

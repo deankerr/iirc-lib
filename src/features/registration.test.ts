@@ -1,32 +1,31 @@
 import { describe, expect, test } from 'bun:test'
 
-import { Client } from '../../client'
-import { type ClientConfig, resolveConfig } from '../../config'
-import { createMockTransport } from '../../mock-transport'
+import { type RuntimeInputConfig } from '../config'
+import { createMockTransport } from '../mock-transport'
+import { createRuntime } from '../runtime'
 
-// Harness wraps a Client + mock transport, attaches on creation, and records
+// Harness wraps a Runtime + mock transport, starts the session immediately, and records
 // sent lines and emitted errors. Callers drive the machine by calling
 // transport.receive() with server-sent IRC lines and asserting on sentLines
 // and errors.
 
-function createHarness(configOverrides: Partial<ClientConfig> = {}) {
-  const config: ClientConfig = {
+function createHarness(configOverrides: Partial<RuntimeInputConfig> = {}) {
+  const config: RuntimeInputConfig = {
     nick: 'testbot',
     sendDelayMs: 0,
     ...configOverrides,
   }
 
-  const client = new Client(config)
   const transport = createMockTransport()
+  const runtime = createRuntime(config, transport.stream)
   const errors: Error[] = []
 
-  client.on('error', (error) => errors.push(error))
+  runtime.on('error', (error) => errors.push(error))
 
-  client.attach(transport.stream)
   // Clear the initial registration burst (CAP LS, PASS?, NICK, USER).
   transport.sentLines.length = 0
 
-  return { client, transport, sentLines: transport.sentLines, errors }
+  return { runtime, transport, sentLines: transport.sentLines, errors }
 }
 
 // --- Helpers for common server-sent IRC lines ---
@@ -135,7 +134,7 @@ describe('registration', () => {
 
   describe('SASL PLAIN happy path', () => {
     test('full SASL PLAIN flow', () => {
-      const { transport, sentLines, client } = createHarness({
+      const { transport, sentLines, runtime } = createHarness({
         sasl: { username: 'jilles', password: 'sesame' },
       })
 
@@ -158,8 +157,8 @@ describe('registration', () => {
       expect(sentLines).toEqual(['CAP END'])
 
       // Verify activeCaps were written.
-      expect(client.runtime.activeCaps.has('sasl')).toBe(true)
-      expect(client.runtime.activeCaps.has('message-tags')).toBe(true)
+      expect(runtime.activeCaps.has('sasl')).toBe(true)
+      expect(runtime.activeCaps.has('message-tags')).toBe(true)
     })
 
     test('sasl config present but server did not advertise sasl cap', () => {
@@ -411,14 +410,14 @@ describe('registration', () => {
 
     test('PASS is sent when password is configured', () => {
       const transport2 = createMockTransport()
-      const client2 = new Client(
-        resolveConfig({
+      createRuntime(
+        {
           nick: 'bot',
           password: 'serverpw',
           sendDelayMs: 0,
-        }),
+        },
+        transport2.stream,
       )
-      client2.attach(transport2.stream)
 
       const initialLines = [...transport2.sentLines]
       expect(initialLines.some((l) => l === 'PASS serverpw')).toBe(true)
@@ -437,16 +436,16 @@ describe('registration', () => {
     })
 
     test('ACK caps with dash prefix are handled as disabled', () => {
-      const { transport, sentLines, client } = createHarness()
+      const { transport, sentLines, runtime } = createHarness()
 
       transport.receive(capLs('testbot', 'message-tags'))
 
       sentLines.length = 0
       transport.receive(capAck('testbot', '-multi-prefix message-tags'))
 
-      expect(client.runtime.activeCaps.has('message-tags')).toBe(true)
+      expect(runtime.activeCaps.has('message-tags')).toBe(true)
       // -multi-prefix means it was disabled, not enabled.
-      expect(client.runtime.activeCaps.has('multi-prefix')).toBe(false)
+      expect(runtime.activeCaps.has('multi-prefix')).toBe(false)
       expect(sentLines).toEqual(['CAP END'])
     })
   })
