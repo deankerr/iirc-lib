@@ -91,7 +91,7 @@ describe('Client', () => {
     expect(client.runtime.isupport.get('NETWORK')).toBe('ExampleNet')
   })
 
-  test('runtime case folds with active server CASEMAPPING', () => {
+  test('runtime case folds defaults to rfc1459 per spec', () => {
     const transport = createMockTransport()
     const client = new Client({
       nick: 'bot',
@@ -100,12 +100,55 @@ describe('Client', () => {
 
     client.attach(transport.stream)
 
-    expect(client.runtime.caseFold('[Foo]')).toBe('[foo]')
+    // Before ISUPPORT, defaults to rfc1459 per modern IRC docs.
+    expect(client.runtime.caseFold('[Foo]')).toBe('{foo}')
+    expect(client.runtime.caseFold('~Foo\\Bar')).toBe('^foo|bar')
+  })
+
+  test('runtime case folds with server-advertised CASEMAPPING', () => {
+    const transport = createMockTransport()
+    const client = new Client({
+      nick: 'bot',
+      sendDelayMs: 0,
+    })
+
+    client.attach(transport.stream)
 
     transport.receive(':server 005 bot CASEMAPPING=rfc1459 :are supported')
 
     expect(client.runtime.caseFold('[Foo]')).toBe('{foo}')
     expect(client.runtime.caseFold('~Foo\\Bar')).toBe('^foo|bar')
+  })
+
+  test('runtime case folds with rfc1459-strict', () => {
+    const transport = createMockTransport()
+    const client = new Client({
+      nick: 'bot',
+      sendDelayMs: 0,
+    })
+
+    client.attach(transport.stream)
+
+    transport.receive(':server 005 bot CASEMAPPING=rfc1459-strict :are supported')
+
+    // rfc1459-strict folds [ ] \ but NOT ~ to ^
+    expect(client.runtime.caseFold('[Foo]')).toBe('{foo}')
+    expect(client.runtime.caseFold('~Foo\\Bar')).toBe('~foo|bar')
+  })
+
+  test('runtime case folds with ascii', () => {
+    const transport = createMockTransport()
+    const client = new Client({
+      nick: 'bot',
+      sendDelayMs: 0,
+    })
+
+    client.attach(transport.stream)
+
+    transport.receive(':server 005 bot CASEMAPPING=ascii :are supported')
+
+    expect(client.runtime.caseFold('[Foo]')).toBe('[foo]')
+    expect(client.runtime.caseFold('~Foo\\Bar')).toBe('~foo\\bar')
   })
 
   test('send writes raw outbound commands without extra policy', () => {

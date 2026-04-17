@@ -30,7 +30,6 @@ SASL PLAIN.
 - [ ] Keep one canonical event stream
   - [ ] Preserve the original IRC command and params on every event
   - [ ] Include derived state context alongside raw wire data
-  - [ ] Avoid one-event-per-command fanout
 
 ## Query And Reply Assemblers
 
@@ -50,12 +49,10 @@ SASL PLAIN.
   - [ ] Consume `multi-prefix` and `userhost-in-names`
   - [ ] Consume `echo-message`, `server-time`, and `message-tags`
 - [ ] Add more modern IRCv3 support
-  - [ ] `batch`
   - [ ] `labeled-response`
   - [ ] `monitor`
   - [ ] `invite-notify`
   - [ ] `setname`
-  - [ ] `draft/chathistory`
   - [ ] `FAIL`, `WARN`, and `NOTE` message handling
 
 ## Outbound Protocol Features
@@ -109,7 +106,6 @@ SASL PLAIN.
   - [ ] Multi-line numeric collectors
   - [ ] Reconnect and lifecycle behavior
 - [ ] Add fixtures for modern IRCv3 flows
-  - [ ] `batch`
   - [ ] labeled responses
   - [ ] account/away/chghost updates
   - [ ] `WHOX` and `NAMES` parsing edge cases

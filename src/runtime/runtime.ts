@@ -42,7 +42,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   private readonly config: RuntimeConfig
 
   readonly connectionState: ConnectionState
-  isupport = new Map<string, IsupportValue>()
+  readonly isupport = new Map<string, IsupportValue>()
 
   constructor(config: RuntimeConfig) {
     super()
@@ -127,13 +127,22 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   }
 }
 
+// Fold a value using the server's advertised CASEMAPPING. Per the spec,
+// clients SHOULD assume rfc1459 until the server explicitly advertises a
+// different mapping.
+//
+// Mappings:
+//   ascii          — only A-Z fold to a-z
+//   rfc1459        — ascii + [→{ ]→} \→| ~→^
+//   rfc1459-strict — ascii + [→{ ]→} \→|   (no ~→^)
+//   rfc7613        — PRECIS-based (falls back to ascii here)
 function foldCaseMapping(value: string, caseMapping: string | true | undefined): string {
   const asciiFolded = value.toLowerCase()
-  if (typeof caseMapping !== 'string') {
-    return asciiFolded
-  }
 
-  switch (caseMapping.toLowerCase()) {
+  // Default to rfc1459 per spec until the server advertises CASEMAPPING.
+  const mapping = typeof caseMapping === 'string' ? caseMapping.toLowerCase() : 'rfc1459'
+
+  switch (mapping) {
     case 'rfc1459':
       return asciiFolded
         .replaceAll('[', '{')
@@ -141,7 +150,7 @@ function foldCaseMapping(value: string, caseMapping: string | true | undefined):
         .replaceAll('\\', '|')
         .replaceAll('~', '^')
 
-    case 'strict-rfc1459':
+    case 'rfc1459-strict':
       return asciiFolded.replaceAll('[', '{').replaceAll(']', '}').replaceAll('\\', '|')
 
     case 'ascii':
