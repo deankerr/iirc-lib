@@ -4,7 +4,7 @@ import type { Duplex } from 'node:stream'
 import type { RuntimeConfig } from '../config'
 import { builtinRuntimeFeatures } from './features'
 import { Numeric } from './numerics'
-import { TransportHarness } from './transport'
+import { Transport } from './transport'
 import type { IrcCommand, IrcMessage } from './transport'
 
 export type RuntimeEvents = {
@@ -26,8 +26,6 @@ export type ConnectionState = {
   account?: string
 }
 
-export type IsupportValue = string | true
-
 export type ParsedSource = {
   nick?: string
   user?: string
@@ -36,13 +34,13 @@ export type ParsedSource = {
 
 export class Runtime extends EventEmitter<RuntimeEvents> {
   readonly numerics = Numeric
-  readonly activeCaps = new Set<string>()
 
-  private readonly harness: TransportHarness
   private readonly config: RuntimeConfig
+  private readonly transport: Transport
 
   readonly connectionState: ConnectionState
-  readonly isupport = new Map<string, IsupportValue>()
+  readonly activeCaps = new Set<string>()
+  readonly isupport = new Map<string, string | true>()
 
   constructor(config: RuntimeConfig) {
     super()
@@ -55,11 +53,11 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
       user: config.user,
     }
 
-    this.harness = new TransportHarness({ sendDelayMs: config.sendDelayMs })
+    this.transport = new Transport({ sendDelayMs: config.sendDelayMs })
 
-    this.harness.on('message', (message) => this.emit('message', message))
-    this.harness.on('close', () => this.handleClose())
-    this.harness.on('error', (error) => this.handleError(error))
+    this.transport.on('message', (message) => this.emit('message', message))
+    this.transport.on('close', () => this.handleClose())
+    this.transport.on('error', (error) => this.handleError(error))
 
     for (const feature of builtinRuntimeFeatures) {
       feature(this)
@@ -67,7 +65,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   }
 
   attach(stream: Duplex): void {
-    this.harness.attach(stream)
+    this.transport.attach(stream)
     this.emit('attach', stream)
   }
 
@@ -80,7 +78,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   }
 
   sendCommand(command: IrcCommand): void {
-    this.harness.send(command)
+    this.transport.send(command)
   }
 
   // Fold a value using the active server CASEMAPPING when available so

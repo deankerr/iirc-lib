@@ -1,2 +1,2 @@
-export * from './transport-harness'
+export * from './transport'
 export * from './types'

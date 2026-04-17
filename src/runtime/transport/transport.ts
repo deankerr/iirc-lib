@@ -7,9 +7,9 @@ import { OutputQueue } from './output-queue'
 import { parseMessage } from './parse-message'
 import type { IrcCommand, IrcMessage } from './types'
 
-export type TransportHarnessStatus = 'idle' | 'attached' | 'closed' | 'error'
+export type TransportStatus = 'idle' | 'attached' | 'closed' | 'error'
 
-export type TransportHarnessEvents = {
+export type TransportEvents = {
   line: [line: string]
   message: [message: IrcMessage]
   close: []
@@ -19,12 +19,12 @@ export type TransportHarnessEvents = {
 // This is the enclosed transport I/O system for one attached stream.
 // Above this boundary the runtime should think in messages and commands, not in
 // chunks, line endings, encoding, queue timing, or stream listeners.
-export class TransportHarness extends EventEmitter<TransportHarnessEvents> {
+export class Transport extends EventEmitter<TransportEvents> {
   private readonly inputBuffer = new InputBuffer()
   private readonly outputQueue: OutputQueue
 
   private stream?: Duplex
-  private currentStatus: TransportHarnessStatus = 'idle'
+  private currentStatus: TransportStatus = 'idle'
 
   private readonly handleDataRef = (chunk: string) => this.handleChunk(chunk)
   private readonly handleCloseRef = () => this.handleClose()
@@ -38,13 +38,13 @@ export class TransportHarness extends EventEmitter<TransportHarnessEvents> {
     })
   }
 
-  get status(): TransportHarnessStatus {
+  get status(): TransportStatus {
     return this.currentStatus
   }
 
   attach(stream: Duplex): void {
     if (this.stream) {
-      throw new Error('TransportHarness is already attached to a transport')
+      throw new Error('Transport is already attached to a transport')
     }
 
     this.stream = stream
@@ -88,7 +88,7 @@ export class TransportHarness extends EventEmitter<TransportHarnessEvents> {
   private writeLine(line: string): void {
     const stream = this.stream
     if (!stream) {
-      throw new Error('TransportHarness has no attached transport')
+      throw new Error('Transport has no attached transport')
     }
 
     stream.write(`${line}\r\n`)
@@ -104,7 +104,7 @@ export class TransportHarness extends EventEmitter<TransportHarnessEvents> {
     this.emit('error', error)
   }
 
-  private releaseCurrentStream(status: TransportHarnessStatus): void {
+  private releaseCurrentStream(status: TransportStatus): void {
     const stream = this.stream
     if (stream) {
       this.unbindStream(stream)
@@ -122,7 +122,7 @@ export class TransportHarness extends EventEmitter<TransportHarnessEvents> {
     stream.removeListener('error', this.handleErrorRef)
   }
 
-  private setStatus(status: TransportHarnessStatus): void {
+  private setStatus(status: TransportStatus): void {
     this.currentStatus = status
   }
 }

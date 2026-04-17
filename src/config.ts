@@ -6,17 +6,16 @@ import { z } from 'zod'
 // runtime schema so that fallback logic (e.g. nick → user) has a chance to
 // run first.
 
-const optionalTrimmedString = z
+const zStringTrim = z
   .string()
   .trim()
-  .optional()
   .transform((v) => (v === '' ? undefined : v))
 
 const clientConfigSchema = z.object({
   nick: z.string().trim(),
-  user: optionalTrimmedString,
-  realname: optionalTrimmedString,
-  password: optionalTrimmedString,
+  user: zStringTrim.optional(),
+  realname: zStringTrim.optional(),
+  password: zStringTrim.optional(),
   sendDelayMs: z.number().optional(),
   sasl: z
     .object({
