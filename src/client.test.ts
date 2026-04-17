@@ -8,8 +8,7 @@ describe('Client', () => {
     const transport = createMockTransport()
     const client = new Client({
       nick: 'bot',
-      user: 'bot',
-      realname: 'Bot',
+      sendDelayMs: 0,
     })
 
     const commands: string[] = []
@@ -27,8 +26,7 @@ describe('Client', () => {
     const transport = createMockTransport()
     const client = new Client({
       nick: 'bot',
-      user: 'bot',
-      realname: 'Bot',
+      sendDelayMs: 0,
     })
 
     let registered = false
@@ -50,8 +48,7 @@ describe('Client', () => {
     const transport = createMockTransport()
     const client = new Client({
       nick: 'bot',
-      user: 'bot',
-      realname: 'Bot',
+      sendDelayMs: 0,
     })
 
     client.attach(transport.stream)
@@ -68,8 +65,7 @@ describe('Client', () => {
     const transport = createMockTransport()
     const client = new Client({
       nick: 'bot',
-      user: 'bot',
-      realname: 'Bot',
+      sendDelayMs: 0,
     })
 
     client.attach(transport.stream)
@@ -84,8 +80,7 @@ describe('Client', () => {
     const transport = createMockTransport()
     const client = new Client({
       nick: 'bot',
-      user: 'bot',
-      realname: 'Bot',
+      sendDelayMs: 0,
     })
 
     client.attach(transport.stream)
@@ -102,8 +97,7 @@ describe('Client', () => {
     const transport = createMockTransport()
     const client = new Client({
       nick: 'bot',
-      user: 'bot',
-      realname: 'Bot',
+      sendDelayMs: 0,
     })
 
     client.attach(transport.stream)
@@ -120,8 +114,7 @@ describe('Client', () => {
     const transport = createMockTransport()
     const client = new Client({
       nick: 'bot',
-      user: 'bot',
-      realname: 'Bot',
+      sendDelayMs: 0,
     })
 
     client.attach(transport.stream)

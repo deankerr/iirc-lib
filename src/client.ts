@@ -1,10 +1,11 @@
 import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 
-import { Runtime, type RuntimeConfig } from './runtime/runtime'
-import type { IrcMessage } from './runtime/transport/types'
+import { type ClientConfig, resolveConfig } from './config'
+import { Runtime } from './runtime'
+import type { IrcMessage } from './runtime'
 
-export type ClientConfig = RuntimeConfig
+export type { ClientConfig }
 
 export type ClientEvents = {
   message: [IrcMessage]
@@ -19,7 +20,7 @@ export class Client extends EventEmitter<ClientEvents> {
   constructor(config: ClientConfig) {
     super()
 
-    this.runtime = new Runtime(config)
+    this.runtime = new Runtime(resolveConfig(config))
 
     this.runtime.on('message', (message) => this.emit('message', message))
     this.runtime.on('registered', () => this.emit('registered'))

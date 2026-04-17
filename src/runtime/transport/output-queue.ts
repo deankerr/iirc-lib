@@ -5,9 +5,9 @@ export class OutputQueue {
   private queue: string[] = []
   private timer: ReturnType<typeof setTimeout> | undefined
 
-  constructor(writeLine: (line: string) => void, options?: { delayMs?: number }) {
+  constructor(writeLine: (line: string) => void, options: { delayMs: number }) {
     this.writeLine = writeLine
-    this.delayMs = options?.delayMs ?? 0
+    this.delayMs = options.delayMs
   }
 
   enqueue(line: string): void {

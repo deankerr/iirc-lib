@@ -1,6 +1,13 @@
-import { identity, isupport, ping, connect } from './features/index'
+import { capabilities, connect, identity, isupport, ping, sasl } from './features/index'
 import type { Runtime } from './runtime'
 
 export type RuntimeFeature = (runtime: Runtime) => void
 
-export const builtinRuntimeFeatures: RuntimeFeature[] = [connect, ping, identity, isupport]
+export const builtinRuntimeFeatures: RuntimeFeature[] = [
+  capabilities,
+  connect,
+  ping,
+  identity,
+  isupport,
+  sasl,
+]

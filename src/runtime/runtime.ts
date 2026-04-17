@@ -1,28 +1,11 @@
 import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 
+import type { RuntimeConfig } from '../config'
 import { builtinRuntimeFeatures } from './features'
 import { Numeric } from './numerics'
 import { TransportHarness } from './transport'
 import type { IrcCommand, IrcMessage } from './transport'
-
-export type SaslConfig = {
-  mechanism?: 'PLAIN'
-  username: string
-  password: string
-  authorizationIdentity?: string
-  required?: boolean
-}
-
-export type RuntimeConfig = {
-  nick: string
-  user: string
-  realname: string
-  password?: string
-  sendDelayMs?: number
-  requestedCapabilities?: string[]
-  sasl?: SaslConfig
-}
 
 export type RuntimeStatus = 'idle' | 'registering' | 'registered' | 'closed' | 'error'
 
@@ -56,6 +39,7 @@ export type ParsedSource = {
 export class Runtime extends EventEmitter<RuntimeEvents> {
   status: RuntimeStatus
   readonly numerics = Numeric
+  readonly activeCaps = new Set<string>()
 
   private readonly harness: TransportHarness
   private readonly config: RuntimeConfig
