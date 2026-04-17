@@ -30,11 +30,11 @@ export class TransportHarness extends EventEmitter<TransportHarnessEvents> {
   private readonly handleCloseRef = () => this.handleClose()
   private readonly handleErrorRef = (error: Error) => this.handleError(error)
 
-  constructor(options?: { sendDelayMs?: number }) {
+  constructor(options: { sendDelayMs: number }) {
     super()
 
     this.outputQueue = new OutputQueue((line) => this.writeLine(line), {
-      delayMs: options?.sendDelayMs,
+      delayMs: options.sendDelayMs,
     })
   }
 

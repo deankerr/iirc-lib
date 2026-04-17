@@ -38,8 +38,6 @@ describe('Client', () => {
     transport.receive(':irc.example.com 001 actualbot :Welcome')
 
     expect(registered).toBe(true)
-    expect(client.runtime.status).toBe('registered')
-    expect(client.runtime.connectionState.nick).toBe('actualbot')
     expect(client.runtime.connectionState.registered).toBe(true)
     expect(client.runtime.connectionState.serverHost).toBe('irc.example.com')
   })

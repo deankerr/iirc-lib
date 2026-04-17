@@ -33,8 +33,8 @@ export type ClientConfig = z.input<typeof clientConfigSchema>
 // input and bugs in our own resolution logic.
 
 const saslSchema = z.object({
-  username: z.string().min(1, "sasl.username is required when sasl is configured"),
-  password: z.string().min(1, "sasl.password is required when sasl is configured"),
+  username: z.string().min(1, 'sasl.username is required when sasl is configured'),
+  password: z.string().min(1, 'sasl.password is required when sasl is configured'),
 })
 
 export type SaslConfig = z.infer<typeof saslSchema>

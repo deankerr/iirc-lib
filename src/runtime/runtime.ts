@@ -7,8 +7,6 @@ import { Numeric } from './numerics'
 import { TransportHarness } from './transport'
 import type { IrcCommand, IrcMessage } from './transport'
 
-export type RuntimeStatus = 'idle' | 'registering' | 'registered' | 'closed' | 'error'
-
 export type RuntimeEvents = {
   attach: [stream: Duplex]
   message: [IrcMessage]
@@ -37,14 +35,13 @@ export type ParsedSource = {
 }
 
 export class Runtime extends EventEmitter<RuntimeEvents> {
-  status: RuntimeStatus
   readonly numerics = Numeric
   readonly activeCaps = new Set<string>()
 
   private readonly harness: TransportHarness
   private readonly config: RuntimeConfig
 
-  connectionState: ConnectionState
+  readonly connectionState: ConnectionState
   isupport = new Map<string, IsupportValue>()
 
   constructor(config: RuntimeConfig) {
@@ -59,7 +56,6 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     }
 
     this.harness = new TransportHarness({ sendDelayMs: config.sendDelayMs })
-    this.status = 'idle'
 
     this.harness.on('message', (message) => this.emit('message', message))
     this.harness.on('close', () => this.handleClose())
@@ -71,7 +67,6 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   }
 
   attach(stream: Duplex): void {
-    this.status = 'registering'
     this.harness.attach(stream)
     this.emit('attach', stream)
   }
@@ -124,12 +119,10 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   }
 
   private handleClose(): void {
-    this.status = 'closed'
     this.emit('close')
   }
 
   private handleError(error: Error): void {
-    this.status = 'error'
     this.emit('error', error)
   }
 }

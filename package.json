@@ -10,6 +10,10 @@
     "check": "tsc --noEmit && oxlint --fix . && oxfmt --write .",
     "test": "bun test"
   },
+  "dependencies": {
+    "remeda": "^2.33.7",
+    "zod": "^4.3.6"
+  },
   "devDependencies": {
     "@types/bun": "^1.3.12",
     "@types/node": "^25.6.0",
@@ -20,9 +24,5 @@
   },
   "trustedDependencies": [
     "@parcel/watcher"
-  ],
-  "dependencies": {
-    "remeda": "^2.33.7",
-    "zod": "^4.3.6"
-  }
+  ]
 }
