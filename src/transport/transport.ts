@@ -27,17 +27,30 @@ export class Transport extends EventEmitter<TransportEvents> {
   readonly stream: Duplex
   private transportOk = true
 
-  private readonly handleDataRef = (chunk: string) => this.handleChunk(chunk)
-  private readonly handleCloseRef = () => this.handleClose()
-  private readonly handleErrorRef = (error: Error) => this.handleError(error)
+  private readonly handleDataRef = (chunk: string) => {
+    this.handleChunk(chunk)
+  }
+
+  private readonly handleCloseRef = () => {
+    this.handleClose()
+  }
+
+  private readonly handleErrorRef = (error: Error) => {
+    this.handleError(error)
+  }
 
   constructor(stream: Duplex, options: { sendDelayMs: number }) {
     super()
 
     this.stream = stream
-    this.outputQueue = new OutputQueue((line) => this.writeLine(line), {
-      delayMs: options.sendDelayMs,
-    })
+    this.outputQueue = new OutputQueue(
+      (line) => {
+        this.writeLine(line)
+      },
+      {
+        delayMs: options.sendDelayMs,
+      },
+    )
 
     stream.setEncoding('utf-8')
     stream.on('data', this.handleDataRef)

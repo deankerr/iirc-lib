@@ -7,7 +7,7 @@
     }
   },
   "scripts": {
-    "check": "oxlint --fix . && oxfmt --write .",
+    "check": "oxlint --type-aware --type-check --fix . && oxfmt --write .",
     "test": "bun test"
   },
   "dependencies": {

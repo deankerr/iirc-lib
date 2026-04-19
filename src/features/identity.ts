@@ -14,15 +14,18 @@ export function identity(runtime: Runtime): void {
         const sourceNick = runtime.parseSourceNick(message.source)
         const currentNick = runtime.connectionState.nick
 
-        if (!sourceNick || !currentNick) {
+        // Malformed or partial nick changes are ignored so this feature only
+        // advances when the server gave us a concrete before/after identity.
+        if (sourceNick === undefined || sourceNick.length === 0 || currentNick.length === 0) {
           break
         }
+
         if (runtime.caseFold(sourceNick) !== runtime.caseFold(currentNick)) {
           break
         }
 
         const [nextNick] = message.params
-        if (!nextNick) {
+        if (nextNick === undefined || nextNick.length === 0) {
           break
         }
 

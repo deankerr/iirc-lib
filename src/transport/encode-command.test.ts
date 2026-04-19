@@ -22,6 +22,7 @@ type MessageJoinFixture = {
 // shared msg-join corpus here, but only for fixture cases that are representable
 // by IrcCommand today. Source/tag serialization can be added later with their
 // own transport shape and fixture coverage.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const fixture = Bun.YAML.parse(
   await Bun.file(new URL('../../test-data/msg-join.yaml', import.meta.url)).text(),
 ) as MessageJoinFixture

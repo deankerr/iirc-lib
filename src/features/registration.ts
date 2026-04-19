@@ -102,7 +102,7 @@ export function registration(runtime: Runtime): void {
   // CAP LS suspends registration server-side until CAP END.
   runtime.on('register', () => {
     runtime.send('CAP', 'LS', '302')
-    if (config.password) {
+    if (config.password !== undefined) {
       runtime.send('PASS', config.password)
     }
     runtime.send('NICK', config.nick)
@@ -126,16 +126,16 @@ export function registration(runtime: Runtime): void {
       // nick!user@host in the trailing welcome text, which we treat as
       // best-effort enrichment rather than a protocol guarantee.
       const [nick] = message.params
-      if (nick) {
+      if (nick !== undefined && nick.length > 0) {
         runtime.connectionState.nick = nick
       }
-      if (self?.user) {
+      if (self?.user !== undefined) {
         runtime.connectionState.user = self.user
       }
-      if (self?.host) {
+      if (self?.host !== undefined) {
         runtime.connectionState.host = self.host
       }
-      if (message.source) {
+      if (message.source !== undefined && message.source.length > 0) {
         runtime.connectionState.serverHost = message.source
       }
 

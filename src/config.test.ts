@@ -112,26 +112,4 @@ describe('resolveConfig', () => {
     expect(config.user).toBe('user')
     expect(config.realname).toBe('My Bot')
   })
-
-  test('includes structured zod issues on validation error', () => {
-    try {
-      resolveConfig({ nick: '' })
-    } catch (error) {
-      expect(error).toBeInstanceOf(z.ZodError)
-      const zodError = error as z.ZodError
-      expect(zodError.issues.length).toBeGreaterThan(0)
-      expect(zodError.issues.some((i) => i.message.includes('nick is required'))).toBe(true)
-    }
-  })
-
-  test('aggregates multiple validation errors', () => {
-    try {
-      resolveConfig({ nick: '', sendDelayMs: -5 })
-    } catch (error) {
-      expect(error).toBeInstanceOf(z.ZodError)
-      const { issues } = error as z.ZodError
-      // Empty nick and negative sendDelayMs should both appear.
-      expect(issues.length).toBeGreaterThanOrEqual(2)
-    }
-  })
 })

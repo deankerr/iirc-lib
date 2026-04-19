@@ -20,6 +20,7 @@ type MessageSplitFixture = {
 // These tests pin our inbound parser to the shared IRC fixture corpus in
 // test-data/msg-split.yaml, so future parser changes stay aligned with the
 // expected wire-level message shape.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const fixture = Bun.YAML.parse(
   await Bun.file(new URL('../../test-data/msg-split.yaml', import.meta.url)).text(),
 ) as MessageSplitFixture
@@ -42,7 +43,7 @@ function toExpectedMessage(atoms: MessageAtoms): IrcMessage {
     message.tags = atoms.tags
   }
 
-  if (atoms.source) {
+  if (atoms.source !== undefined) {
     message.source = atoms.source
   }
 

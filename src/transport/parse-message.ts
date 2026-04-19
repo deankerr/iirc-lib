@@ -56,7 +56,8 @@ export function parseMessage(raw: string): IrcMessage {
   if (tags) {
     message.tags = tags
   }
-  if (source) {
+
+  if (source !== undefined) {
     message.source = source
   }
 

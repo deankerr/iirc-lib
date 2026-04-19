@@ -41,7 +41,7 @@ export type ParsedSource = {
 }
 
 function parseSourceValue(source: string | undefined): ParsedSource | undefined {
-  if (!source) {
+  if (source === undefined || source.length === 0) {
     return undefined
   }
 
@@ -64,7 +64,7 @@ function parseSourceValue(source: string | undefined): ParsedSource | undefined 
 
   const host = atIndex === -1 ? undefined : source.slice(atIndex + 1) || undefined
 
-  if (!nick && !user && !host) {
+  if (nick === undefined && user === undefined && host === undefined) {
     return undefined
   }
   return { host, nick, user }
@@ -96,8 +96,12 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     this.transport = transport
 
     this.transport.on('message', (message) => this.emit('message', message))
-    this.transport.on('close', () => this.handleClose())
-    this.transport.on('error', (error) => this.handleError(error))
+    this.transport.on('close', () => {
+      this.handleClose()
+    })
+    this.transport.on('error', (error) => {
+      this.handleError(error)
+    })
 
     for (const feature of features) {
       feature(this)

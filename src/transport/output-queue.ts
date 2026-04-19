@@ -18,7 +18,9 @@ export class OutputQueue {
 
     if (!this.timer) {
       this.writeLine(line)
-      this.timer = setTimeout(() => this.drain(), this.delayMs)
+      this.timer = setTimeout(() => {
+        this.drain()
+      }, this.delayMs)
       return
     }
 
@@ -38,11 +40,13 @@ export class OutputQueue {
     this.timer = undefined
 
     const next = this.queue.shift()
-    if (!next) {
+    if (next === undefined) {
       return
     }
 
     this.writeLine(next)
-    this.timer = setTimeout(() => this.drain(), this.delayMs)
+    this.timer = setTimeout(() => {
+      this.drain()
+    }, this.delayMs)
   }
 }

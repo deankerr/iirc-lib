@@ -105,7 +105,9 @@ async function runSession(
     const scheduleQuit = (): void => {
       ctx.sessionTimer = setTimeout(() => {
         if (quitSent) {
-          settle(() => reject(new Error('Timed out waiting for the server after QUIT')))
+          settle(() => {
+            reject(new Error('Timed out waiting for the server after QUIT'))
+          })
           return
         }
 
@@ -134,12 +136,16 @@ async function runSession(
     })
 
     runtime.on('error', (error) => {
-      settle(() => reject(error))
+      settle(() => {
+        reject(error)
+      })
     })
 
     runtime.on('close', () => {
       if (!quitSent) {
-        settle(() => reject(new Error('Server closed before registration completed')))
+        settle(() => {
+          reject(new Error('Server closed before registration completed'))
+        })
         return
       }
 
@@ -235,7 +241,7 @@ async function runTour(options: TourOptions): Promise<void> {
   const startIndex = options.startAt - 1
   const selectedTargets = list.slice(
     startIndex,
-    options.limit ? startIndex + options.limit : undefined,
+    options.limit === undefined ? undefined : startIndex + options.limit,
   )
 
   if (selectedTargets.length === 0) {

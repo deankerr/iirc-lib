@@ -4,7 +4,7 @@ import type { IrcCommand } from './types'
 export function encodeCommand(command: IrcCommand): string {
   assertDefinedParams(command)
 
-  if (!command.trailing) {
+  if (command.trailing !== true) {
     return buildLine(command.command, command.params)
   }
 
