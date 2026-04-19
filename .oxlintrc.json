@@ -12,13 +12,13 @@
   "rules": {
     // ultracite tyrany
     "array-type": "off",
-    "complexity": "off",
+    "complexity": "error",
     "func-style": "off",
     "import/no-relative-parent-imports": "off",
     "no-inline-comments": "off",
     "no-use-before-define": "off",
     "no-warning-comments": "off",
-    // "sort-keys": ["error", "asc", { "allowLineSeparatedGroups": true, "natural": true }],
+    "sort-keys": ["error", "asc", { "allowLineSeparatedGroups": true, "natural": true }],
     "typescript/consistent-type-definitions": "off",
     "typescript/triple-slash-reference": "off",
     "unicorn/consistent-function-scoping": "off",

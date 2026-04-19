@@ -93,6 +93,242 @@ function chunkPayload(base64: string): string[] {
   return chunks
 }
 
+type RegistrationContext = {
+  availableCaps: Set<string>
+  config: Runtime['config']
+  runtime: Runtime
+}
+
+type RegistrationStateContext = RegistrationContext & {
+  capMessage: ParsedCapMessage
+  message: IrcMessage
+  state: State
+}
+
+// 001/004 are registration facts, not CAP/SASL phase transitions. We observe
+// them independently so the phase machine can stay focused on negotiation.
+function observeRegistrationMetadata(runtime: Runtime, message: IrcMessage): boolean {
+  // 001 RPL_WELCOME confirms registration. The first param is the assigned
+  // nickname (may differ from what we requested). The trailing param may
+  // contain nick!user@host.
+  if (message.command === runtime.numerics.RPL_WELCOME) {
+    const self = runtime.parseSource(message.params.at(-1))
+
+    // 001 guarantees the assigned initial nick. Some networks also include
+    // nick!user@host in the trailing welcome text, which we treat as
+    // best-effort enrichment rather than a protocol guarantee.
+    const [nick] = message.params
+    if (nick !== undefined && nick.length > 0) {
+      runtime.connectionState.nick = nick
+    }
+    if (self?.user !== undefined) {
+      runtime.connectionState.user = self.user
+    }
+    if (self?.host !== undefined) {
+      runtime.connectionState.host = self.host
+    }
+    if (message.source !== undefined && message.source.length > 0) {
+      runtime.connectionState.serverHost = message.source
+    }
+
+    runtime.connectionState.registered = true
+    runtime.emit('registered')
+    return true
+  }
+
+  // 004 RPL_MYINFO is part of the required post-registration burst.
+  if (message.command === runtime.numerics.RPL_MYINFO) {
+    runtime.connectionState.serverVersion =
+      message.params[2] ?? runtime.connectionState.serverVersion
+    return true
+  }
+
+  return false
+}
+
+// CAP bookkeeping is observational: LS grows the available set and ACK mutates
+// active caps. These updates stay separate from the narrower phase transitions.
+function observeCapabilityBookkeeping(
+  { availableCaps, runtime }: RegistrationContext,
+  capMessage: ParsedCapMessage,
+): void {
+  if (capMessage?.subcommand === 'LS') {
+    for (const name of capMessage.names) {
+      availableCaps.add(name)
+    }
+    return
+  }
+
+  if (capMessage?.subcommand === 'ACK') {
+    applyAckCaps(runtime, capMessage.names)
+  }
+}
+
+function handleCapLs({
+  availableCaps,
+  capMessage,
+  config,
+  runtime,
+  state,
+}: RegistrationStateContext): State | undefined {
+  // CAP message format (server-sent):
+  //   CAP <nick> <subcommand> [*] :<caps>
+  // params[0] = nick (or *), params[1] = subcommand,
+  // params[2] = * (continuation) or caps string,
+  // params[3] = caps string (when continuation).
+  if (capMessage?.subcommand !== 'LS') {
+    return undefined
+  }
+
+  // Continuation lines are just accumulation — stay in current state.
+  if (capMessage.hasContinuation) {
+    return state
+  }
+
+  // Only the initial registration LS should decide whether we request any
+  // capabilities or finish negotiation immediately.
+  if (state !== 'collecting_ls') {
+    return state
+  }
+
+  const capsToRequest = config.requestedCapabilities.filter((cap) => availableCaps.has(cap))
+
+  if (capsToRequest.length === 0) {
+    runtime.send('CAP', 'END')
+    return 'done'
+  }
+
+  runtime.sendCommand({
+    command: 'CAP',
+    params: ['REQ', capsToRequest.join(' ')],
+    trailing: true,
+  })
+  return 'awaiting_ack'
+}
+
+function handleCapAck({
+  capMessage,
+  config,
+  runtime,
+  state,
+}: RegistrationStateContext): State | undefined {
+  if (capMessage?.subcommand !== 'ACK') {
+    return undefined
+  }
+
+  // Continuation lines are just accumulation — stay in current state.
+  if (capMessage.hasContinuation) {
+    return state
+  }
+
+  // Only the ACK for our registration REQ should advance registration.
+  if (state !== 'awaiting_ack') {
+    return state
+  }
+
+  // SASL must complete before CAP END. If the server acknowledged sasl and we
+  // have credentials, begin authentication.
+  if (config.sasl && runtime.activeCaps.has('sasl')) {
+    runtime.send('AUTHENTICATE', 'PLAIN')
+    return 'authenticating'
+  }
+
+  runtime.send('CAP', 'END')
+  return 'done'
+}
+
+function handleCapNak({ capMessage, state }: RegistrationStateContext): State | undefined {
+  if (capMessage?.subcommand !== 'NAK') {
+    return undefined
+  }
+
+  // Only the NAK for our registration REQ should terminate this machine.
+  if (state !== 'awaiting_ack') {
+    return state
+  }
+
+  return 'error'
+}
+
+function handleAuthenticate({
+  config,
+  message,
+  runtime,
+  state,
+}: RegistrationStateContext): State | undefined {
+  // Server accepts our PLAIN mechanism and is ready for the payload.
+  if (state !== 'authenticating' || message.command !== 'AUTHENTICATE') {
+    return undefined
+  }
+
+  if (message.params[0] !== '+') {
+    return state
+  }
+
+  const saslConfig = config.sasl
+  if (!saslConfig) {
+    return state
+  }
+
+  const payload = encodeSaslPlain(saslConfig.username, saslConfig.password)
+  for (const chunk of chunkPayload(payload)) {
+    runtime.send('AUTHENTICATE', chunk)
+  }
+  return 'sending_payload'
+}
+
+function handleSaslOutcome({
+  message,
+  runtime,
+  state,
+}: RegistrationStateContext): State | undefined {
+  // 903 RPL_SASLSUCCESS: authentication succeeded.
+  if (state === 'sending_payload' && message.command === runtime.numerics.RPL_SASLSUCCESS) {
+    runtime.send('CAP', 'END')
+    return 'done'
+  }
+
+  // 902 ERR_NICKLOCKED: account locked or administratively unavailable.
+  if (state === 'sending_payload' && message.command === runtime.numerics.ERR_NICKLOCKED) {
+    runtime.emit('error', new Error('SASL authentication failed: account locked (902)'))
+    return 'error'
+  }
+
+  // 904 ERR_SASLFAIL: invalid credentials or general SASL failure.
+  if (
+    (state === 'authenticating' || state === 'sending_payload') &&
+    message.command === runtime.numerics.ERR_SASLFAIL
+  ) {
+    runtime.emit('error', new Error('SASL authentication failed (904)'))
+    return 'error'
+  }
+
+  // 905 ERR_SASLTOOLONG: client-sent AUTHENTICATE data exceeded server limit.
+  if (state === 'sending_payload' && message.command === runtime.numerics.ERR_SASLTOOLONG) {
+    runtime.emit('error', new Error('SASL authentication failed: message too long (905)'))
+    return 'error'
+  }
+
+  // 908 RPL_SASLMECHS: server rejected mechanism — listed available ones.
+  if (state === 'authenticating' && message.command === runtime.numerics.RPL_SASLMECHS) {
+    runtime.emit('error', new Error('SASL PLAIN not supported by server (908)'))
+    return 'error'
+  }
+
+  return undefined
+}
+
+function advanceRegistrationState(context: RegistrationStateContext): State {
+  return (
+    handleCapLs(context) ??
+    handleCapAck(context) ??
+    handleCapNak(context) ??
+    handleAuthenticate(context) ??
+    handleSaslOutcome(context) ??
+    context.state
+  )
+}
+
 export function registration(runtime: Runtime): void {
   const { config } = runtime
   let state: State = 'collecting_ls'
@@ -116,38 +352,7 @@ export function registration(runtime: Runtime): void {
   // State diagram is documented in state-machine.md. Unrecognised messages
   // in any state are ignored — the machine stays put and waits.
   runtime.on('message', (message) => {
-    // 001 RPL_WELCOME confirms registration. The first param is the
-    // assigned nickname (may differ from what we requested). The trailing
-    // param may contain nick!user@host.
-    if (message.command === runtime.numerics.RPL_WELCOME) {
-      const self = runtime.parseSource(message.params.at(-1))
-
-      // 001 guarantees the assigned initial nick. Some networks also include
-      // nick!user@host in the trailing welcome text, which we treat as
-      // best-effort enrichment rather than a protocol guarantee.
-      const [nick] = message.params
-      if (nick !== undefined && nick.length > 0) {
-        runtime.connectionState.nick = nick
-      }
-      if (self?.user !== undefined) {
-        runtime.connectionState.user = self.user
-      }
-      if (self?.host !== undefined) {
-        runtime.connectionState.host = self.host
-      }
-      if (message.source !== undefined && message.source.length > 0) {
-        runtime.connectionState.serverHost = message.source
-      }
-
-      runtime.connectionState.registered = true
-      runtime.emit('registered')
-      return
-    }
-
-    // 004 RPL_MYINFO is part of the required post-registration burst.
-    if (message.command === runtime.numerics.RPL_MYINFO) {
-      runtime.connectionState.serverVersion =
-        message.params[2] ?? runtime.connectionState.serverVersion
+    if (observeRegistrationMetadata(runtime, message)) {
       return
     }
 
@@ -157,149 +362,15 @@ export function registration(runtime: Runtime): void {
 
     const capMessage = parseCapMessage(message)
 
-    // --- CAP LS (all states) ---
+    observeCapabilityBookkeeping({ availableCaps, config, runtime }, capMessage)
 
-    // CAP message format (server-sent):
-    //   CAP <nick> <subcommand> [*] :<caps>
-    // params[0] = nick (or *), params[1] = subcommand,
-    // params[2] = * (continuation) or caps string,
-    // params[3] = caps string (when continuation).
-    if (capMessage?.subcommand === 'LS') {
-      // Accumulate LS caps across continuation lines so the final line can
-      // compute the intersection with what the client requested.
-      for (const name of capMessage.names) {
-        availableCaps.add(name)
-      }
-
-      // Continuation lines are just accumulation — stay in current state.
-      if (capMessage.hasContinuation) {
-        return
-      }
-
-      // Only the initial registration LS should decide whether we request any
-      // capabilities or finish negotiation immediately.
-      if (state !== 'collecting_ls') {
-        return
-      }
-
-      const requested = config.requestedCapabilities
-      const capsToRequest = requested.filter((cap) => availableCaps.has(cap))
-
-      if (capsToRequest.length === 0) {
-        runtime.send('CAP', 'END')
-        state = 'done'
-        return
-      }
-
-      runtime.sendCommand({
-        command: 'CAP',
-        params: ['REQ', capsToRequest.join(' ')],
-        trailing: true,
-      })
-      state = 'awaiting_ack'
-      return
-    }
-
-    // --- CAP ACK (all states) ---
-
-    if (capMessage?.subcommand === 'ACK') {
-      // ACK lines are final for the caps they mention, even if they arrive
-      // outside the narrow registration step this machine advances through.
-      applyAckCaps(runtime, capMessage.names)
-
-      // Continuation lines are just accumulation — stay in current state.
-      if (capMessage.hasContinuation) {
-        return
-      }
-
-      // Only the ACK for our registration REQ should advance registration.
-      if (state !== 'awaiting_ack') {
-        return
-      }
-
-      // SASL must complete before CAP END. If the server acknowledged
-      // sasl and we have credentials, begin authentication.
-      if (config.sasl && runtime.activeCaps.has('sasl')) {
-        runtime.send('AUTHENTICATE', 'PLAIN')
-        state = 'authenticating'
-        return
-      }
-
-      runtime.send('CAP', 'END')
-      state = 'done'
-      return
-    }
-
-    // --- CAP NAK (registration REQ reply only) ---
-
-    if (capMessage?.subcommand === 'NAK') {
-      // Only the NAK for our registration REQ should terminate this machine.
-      if (state !== 'awaiting_ack') {
-        return
-      }
-
-      state = 'error'
-      return
-    }
-
-    // --- AUTHENTICATE + (authenticating state) ---
-    // Server accepts our PLAIN mechanism and is ready for the payload.
-
-    if (state === 'authenticating' && message.command === 'AUTHENTICATE') {
-      if (message.params[0] !== '+') {
-        return
-      }
-
-      const saslConfig = config.sasl
-      if (!saslConfig) {
-        return
-      }
-
-      const payload = encodeSaslPlain(saslConfig.username, saslConfig.password)
-      for (const chunk of chunkPayload(payload)) {
-        runtime.send('AUTHENTICATE', chunk)
-      }
-      state = 'sending_payload'
-      return
-    }
-
-    // --- SASL numerics (sending_payload state) ---
-
-    // 903 RPL_SASLSUCCESS: authentication succeeded.
-    if (state === 'sending_payload' && message.command === runtime.numerics.RPL_SASLSUCCESS) {
-      runtime.send('CAP', 'END')
-      state = 'done'
-      return
-    }
-
-    // 902 ERR_NICKLOCKED: account locked or administratively unavailable.
-    if (state === 'sending_payload' && message.command === runtime.numerics.ERR_NICKLOCKED) {
-      runtime.emit('error', new Error('SASL authentication failed: account locked (902)'))
-      state = 'error'
-      return
-    }
-
-    // 904 ERR_SASLFAIL: invalid credentials or general SASL failure.
-    if (
-      (state === 'authenticating' || state === 'sending_payload') &&
-      message.command === runtime.numerics.ERR_SASLFAIL
-    ) {
-      runtime.emit('error', new Error('SASL authentication failed (904)'))
-      state = 'error'
-      return
-    }
-
-    // 905 ERR_SASLTOOLONG: client-sent AUTHENTICATE data exceeded server limit.
-    if (state === 'sending_payload' && message.command === runtime.numerics.ERR_SASLTOOLONG) {
-      runtime.emit('error', new Error('SASL authentication failed: message too long (905)'))
-      state = 'error'
-      return
-    }
-
-    // 908 RPL_SASLMECHS: server rejected mechanism — listed available ones.
-    if (state === 'authenticating' && message.command === runtime.numerics.RPL_SASLMECHS) {
-      runtime.emit('error', new Error('SASL PLAIN not supported by server (908)'))
-      state = 'error'
-    }
+    state = advanceRegistrationState({
+      availableCaps,
+      capMessage,
+      config,
+      message,
+      runtime,
+      state,
+    })
   })
 }
