@@ -1,6 +1,8 @@
 {
-  "ignorePatterns": ["**/skills"],
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": [".agents/skills", ".claude/skills"],
   "semi": false,
   "singleQuote": true,
-  "sortImports": {}
+  "sortImports": {},
+  "sortPackageJson": { "sortScripts": true }
 }

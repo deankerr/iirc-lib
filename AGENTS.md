@@ -2,8 +2,6 @@
 
 IRC client library. Protocol parsing, connection lifecycle, state tracking, message enrichment.
 
-- `TODO.md` Check and update frequently.
-
 ## Commands
 
 - `bun run check` to type check/lint/format
