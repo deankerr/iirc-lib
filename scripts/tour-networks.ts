@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import { connect as connectTcp } from 'node:net'
 import type { Socket } from 'node:net'
-import { resolve } from 'node:path'
+import { resolve as resolvePath } from 'node:path'
 import process from 'node:process'
 import { connect as connectTls } from 'node:tls'
 import type { TLSSocket } from 'node:tls'
@@ -16,9 +16,9 @@ const CONNECT_TIMEOUT_MS = 10_000
 const SESSION_TIMEOUT_MS = 20_000
 const TOUR_NICK = 'iirc-tour'
 const QUIT_MESSAGE = 'iirc-lib network tour complete'
-const DATA_DIR = resolve('data')
-const NETWORK_LIST_PATH = resolve(DATA_DIR, 'network-list.json')
-const TOUR_OUT_DIR = resolve(
+const DATA_DIR = resolvePath('data')
+const NETWORK_LIST_PATH = resolvePath(DATA_DIR, 'network-list.json')
+const TOUR_OUT_DIR = resolvePath(
   DATA_DIR,
   `tour-networks-${new Date().toISOString().replaceAll(':', '-')}`,
 )
@@ -48,17 +48,24 @@ type AttemptCtx = {
 }
 
 // Phase 1: wait for the TCP/TLS handshake to complete or fail.
-function awaitConnection(server: ConnectionOption, ctx: AttemptCtx): Promise<void> {
+async function awaitConnection(server: ConnectionOption, ctx: AttemptCtx): Promise<void> {
+  // oxlint-disable-next-line promise/avoid-new
   return new Promise((resolve, reject) => {
     const readyEvent = server.tls ? 'secureConnect' : 'connect'
+    const { stream } = ctx
+
+    if (!stream) {
+      reject(new Error('Connection stream was not created'))
+      return
+    }
 
     const onReady = (): void => {
-      ctx.stream?.removeListener('error', onError)
+      stream.removeListener('error', onError)
       resolve()
     }
 
     const onError = (error: Error): void => {
-      ctx.stream?.removeListener(readyEvent, onReady)
+      stream.removeListener(readyEvent, onReady)
       reject(error)
     }
 
@@ -66,22 +73,31 @@ function awaitConnection(server: ConnectionOption, ctx: AttemptCtx): Promise<voi
       reject(new Error(`Timed out connecting to ${server.host}:${server.port}`))
     }, CONNECT_TIMEOUT_MS)
 
-    ctx.stream!.once(readyEvent, onReady)
-    ctx.stream!.once('error', onError)
+    stream.once(readyEvent, onReady)
+    stream.once('error', onError)
   })
 }
 
 // Phase 2: run the IRC registration session and wait for a clean close.
-function runSession(
+async function runSession(
   ctx: AttemptCtx,
   log: (event: string, fields?: Record<string, unknown>) => void,
 ): Promise<void> {
+  // oxlint-disable-next-line promise/avoid-new
   return new Promise((resolve, reject) => {
     let settled = false
     let quitSent = false
+    const { stream } = ctx
+
+    if (!stream) {
+      reject(new Error('Session stream was not created'))
+      return
+    }
 
     const settle = (fn: () => void): void => {
-      if (settled) return
+      if (settled) {
+        return
+      }
       settled = true
       fn()
     }
@@ -100,7 +116,7 @@ function runSession(
     }
 
     // Constructs the Transport and Runtime pair for the ready stream.
-    const transport = new Transport(ctx.stream!, { sendDelayMs: SEND_DELAY_MS })
+    const transport = new Transport(stream, { sendDelayMs: SEND_DELAY_MS })
     const runtime = new Runtime(
       resolveConfig({ nick: TOUR_NICK, sendDelayMs: SEND_DELAY_MS }),
       transport,
@@ -142,19 +158,19 @@ async function runAttempt(
   outputPath: string,
 ): Promise<boolean> {
   const logs: string[] = []
-  const ctx: AttemptCtx = { stream: undefined, connectTimer: undefined, sessionTimer: undefined }
+  const ctx: AttemptCtx = { connectTimer: undefined, sessionTimer: undefined, stream: undefined }
 
   const log = (event: string, fields: Record<string, unknown> = {}): void => {
     logs.push(`${JSON.stringify({ _t: new Date().toJSON(), event, ...fields })}\n`)
   }
 
   log('attempt', {
-    network,
     attempt: attemptNumber,
     host: server.host,
+    network,
+    nick: TOUR_NICK,
     port: server.port,
     tls: server.tls,
-    nick: TOUR_NICK,
   })
 
   try {
@@ -162,8 +178,8 @@ async function runAttempt(
       ? connectTls({
           host: server.host,
           port: server.port,
-          servername: server.host,
           rejectUnauthorized: TLS_REJECT_UNAUTHORIZED,
+          servername: server.host,
         } as Parameters<typeof connectTls>[0])
       : connectTcp({ host: server.host, port: server.port })
 
@@ -199,7 +215,7 @@ function buildOutputPath(
 ): string {
   const networkSlug = slugify(networkName)
   const serverSlug = slugify(`${server.host}-${server.port}-${server.tls ? 'tls' : 'plain'}`)
-  return resolve(
+  return resolvePath(
     TOUR_OUT_DIR,
     `${String(networkNumber).padStart(3, '0')}-${networkSlug}-${String(attemptOffset + 1).padStart(2, '0')}-${serverSlug}.ndjson`,
   )
@@ -207,6 +223,7 @@ function buildOutputPath(
 
 async function loadNetworkList(): Promise<NetworkEntry[]> {
   const file = Bun.file(NETWORK_LIST_PATH)
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return file.json() as Promise<NetworkEntry[]>
 }
 
@@ -234,11 +251,9 @@ async function runTour(options: TourOptions): Promise<void> {
 
     // Keep the checked-in network list intact and apply CLI filtering per run.
     // Sort TLS servers first so we always prefer encrypted connections.
-    const servers = (
-      options.skipTls ? target.servers.filter((server) => !server.tls) : target.servers
-    )
-      .slice()
-      .sort((a, b) => Number(b.tls) - Number(a.tls))
+    const servers = [
+      ...(options.skipTls ? target.servers.filter((server) => !server.tls) : target.servers),
+    ].toSorted((a, b) => Number(b.tls) - Number(a.tls))
 
     // Warn when filtering removes every advertised endpoint for a network.
     if (servers.length === 0) {
@@ -284,8 +299,12 @@ function parseArgs(argv: string[]) {
 }
 
 if (import.meta.main) {
-  runTour(parseArgs(process.argv.slice(2))).catch((error) => {
-    console.error(error)
-    process.exit(1)
-  })
+  // oxlint-disable-next-line promise/prefer-await-to-then
+  runTour(parseArgs(process.argv.slice(2))).catch(
+    // oxlint-disable-next-line promise/prefer-await-to-callbacks
+    (error: unknown) => {
+      console.error(error)
+      process.exit(1)
+    },
+  )
 }

@@ -38,7 +38,9 @@ export class OutputQueue {
     this.timer = undefined
 
     const next = this.queue.shift()
-    if (!next) return
+    if (!next) {
+      return
+    }
 
     this.writeLine(next)
     this.timer = setTimeout(() => this.drain(), this.delayMs)

@@ -39,7 +39,7 @@ export class Transport extends EventEmitter<TransportEvents> {
       delayMs: options.sendDelayMs,
     })
 
-    stream.setEncoding('utf8')
+    stream.setEncoding('utf-8')
     stream.on('data', this.handleDataRef)
     stream.on('close', this.handleCloseRef)
     stream.on('error', this.handleErrorRef)
@@ -57,7 +57,9 @@ export class Transport extends EventEmitter<TransportEvents> {
     const lines = this.inputBuffer.push(chunk)
 
     for (const line of lines) {
-      if (line.length === 0) continue
+      if (line.length === 0) {
+        continue
+      }
 
       // Emit the raw inbound IRC line before parsing so observers can see
       // exactly what arrived off the wire.

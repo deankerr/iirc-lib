@@ -21,7 +21,9 @@ export function parseMessage(raw: string): IrcMessage {
     }
     tags = parseTags(line.slice(1, spaceIndex))
     pos = spaceIndex + 1
-    while (line[pos] === ' ') pos++
+    while (line[pos] === ' ') {
+      pos += 1
+    }
   }
 
   if (line[pos] === ':') {
@@ -31,7 +33,9 @@ export function parseMessage(raw: string): IrcMessage {
     }
     source = line.slice(pos + 1, spaceIndex)
     pos = spaceIndex + 1
-    while (line[pos] === ' ') pos++
+    while (line[pos] === ' ') {
+      pos += 1
+    }
   }
 
   const remainder = line.slice(pos)
@@ -49,8 +53,12 @@ export function parseMessage(raw: string): IrcMessage {
     params: parseParams(paramsSource),
   }
 
-  if (tags) message.tags = tags
-  if (source) message.source = source
+  if (tags) {
+    message.tags = tags
+  }
+  if (source) {
+    message.source = source
+  }
 
   return message
 }
@@ -59,7 +67,9 @@ function parseTags(serialized: string): Record<string, string> {
   const tags: Record<string, string> = {}
 
   for (const part of serialized.split(';')) {
-    if (part.length === 0) continue
+    if (part.length === 0) {
+      continue
+    }
 
     const equalsIndex = part.indexOf('=')
     if (equalsIndex === -1) {
@@ -84,8 +94,12 @@ function parseParams(serialized: string): string[] {
   let pos = 0
 
   while (pos < serialized.length) {
-    while (serialized[pos] === ' ') pos++
-    if (pos >= serialized.length) break
+    while (serialized[pos] === ' ') {
+      pos += 1
+    }
+    if (pos >= serialized.length) {
+      break
+    }
 
     if (serialized[pos] === ':') {
       params.push(serialized.slice(pos + 1))
@@ -114,32 +128,40 @@ function unescapeTagValue(value: string): string {
 
     if (char !== '\\') {
       result += char
-      index++
+      index += 1
       continue
     }
 
     const next = value[index + 1]
-    if (next === undefined) break
+    if (next === undefined) {
+      break
+    }
 
     switch (next) {
-      case ':':
+      case ':': {
         result += ';'
         break
-      case 's':
+      }
+      case 's': {
         result += ' '
         break
-      case '\\':
+      }
+      case '\\': {
         result += '\\'
         break
-      case 'r':
+      }
+      case 'r': {
         result += '\r'
         break
-      case 'n':
+      }
+      case 'n': {
         result += '\n'
         break
-      default:
+      }
+      default: {
         result += next
         break
+      }
     }
 
     index += 2

@@ -20,11 +20,11 @@ describe('resolveConfig', () => {
   test('preserves explicit values over defaults', () => {
     const config = resolveConfig({
       nick: 'mybot',
-      user: 'botuser',
-      realname: 'My Bot',
       password: 'secret',
+      realname: 'My Bot',
+      sasl: { password: 'pw', username: 'me' },
       sendDelayMs: 200,
-      sasl: { username: 'me', password: 'pw' },
+      user: 'botuser',
     })
 
     expect(config.nick).toBe('mybot')
@@ -33,7 +33,7 @@ describe('resolveConfig', () => {
     expect(config.password).toBe('secret')
     expect(config.sendDelayMs).toBe(200)
     expect(config.requestedCapabilities).toEqual(['message-tags', 'sasl'])
-    expect(config.sasl).toEqual({ username: 'me', password: 'pw' })
+    expect(config.sasl).toEqual({ password: 'pw', username: 'me' })
   })
 
   test('normalises whitespace-only nick to error', () => {
@@ -64,13 +64,13 @@ describe('resolveConfig', () => {
   })
 
   test('throws when sasl is missing username', () => {
-    expect(() => resolveConfig({ nick: 'bot', sasl: { username: '', password: 'pw' } })).toThrow(
+    expect(() => resolveConfig({ nick: 'bot', sasl: { password: 'pw', username: '' } })).toThrow(
       z.ZodError,
     )
   })
 
   test('throws when sasl is missing password', () => {
-    expect(() => resolveConfig({ nick: 'bot', sasl: { username: 'me', password: '' } })).toThrow(
+    expect(() => resolveConfig({ nick: 'bot', sasl: { password: '', username: 'me' } })).toThrow(
       z.ZodError,
     )
   })
@@ -78,7 +78,7 @@ describe('resolveConfig', () => {
   test('auto-adds sasl capability when sasl config is provided', () => {
     const config = resolveConfig({
       nick: 'bot',
-      sasl: { username: 'me', password: 'pw' },
+      sasl: { password: 'pw', username: 'me' },
     })
     expect(config.requestedCapabilities).toContain('sasl')
   })
@@ -86,7 +86,7 @@ describe('resolveConfig', () => {
   test('does not duplicate sasl capability if already in defaults', () => {
     const config = resolveConfig({
       nick: 'bot',
-      sasl: { username: 'me', password: 'pw' },
+      sasl: { password: 'pw', username: 'me' },
     })
     const saslCount = config.requestedCapabilities.filter((c) => c === 'sasl').length
     expect(saslCount).toBe(1)
@@ -105,8 +105,8 @@ describe('resolveConfig', () => {
   test('trims nick, user, and realname', () => {
     const config = resolveConfig({
       nick: '  bot  ',
-      user: '  user  ',
       realname: '  My Bot  ',
+      user: '  user  ',
     })
     expect(config.nick).toBe('bot')
     expect(config.user).toBe('user')
@@ -129,7 +129,7 @@ describe('resolveConfig', () => {
       resolveConfig({ nick: '', sendDelayMs: -5 })
     } catch (error) {
       expect(error).toBeInstanceOf(z.ZodError)
-      const issues = (error as z.ZodError).issues
+      const { issues } = error as z.ZodError
       // Empty nick and negative sendDelayMs should both appear.
       expect(issues.length).toBeGreaterThanOrEqual(2)
     }

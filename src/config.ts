@@ -13,16 +13,16 @@ const zStringTrim = z
 
 const runtimeInputConfigSchema = z.object({
   nick: z.string().trim(),
-  user: zStringTrim.optional(),
-  realname: zStringTrim.optional(),
   password: zStringTrim.optional(),
-  sendDelayMs: z.number().optional(),
+  realname: zStringTrim.optional(),
   sasl: z
     .object({
-      username: z.string().trim(),
       password: z.string(),
+      username: z.string().trim(),
     })
     .optional(),
+  sendDelayMs: z.number().optional(),
+  user: zStringTrim.optional(),
 })
 
 export type RuntimeInputConfig = z.input<typeof runtimeInputConfigSchema>
@@ -32,20 +32,20 @@ export type RuntimeInputConfig = z.input<typeof runtimeInputConfigSchema>
 // input and bugs in our own resolution logic.
 
 const saslSchema = z.object({
-  username: z.string().min(1, 'sasl.username is required when sasl is configured'),
   password: z.string().min(1, 'sasl.password is required when sasl is configured'),
+  username: z.string().min(1, 'sasl.username is required when sasl is configured'),
 })
 
 export type SaslConfig = z.infer<typeof saslSchema>
 
 const runtimeConfigSchema = z.object({
   nick: z.string().min(1, 'nick is required and must be non-empty'),
-  user: z.string().min(1, 'user is required and must be non-empty'),
-  realname: z.string().min(1, 'realname is required and must be non-empty'),
   password: z.string().optional(),
-  sendDelayMs: z.number().nonnegative('sendDelayMs must be non-negative'),
+  realname: z.string().min(1, 'realname is required and must be non-empty'),
   requestedCapabilities: z.array(z.string()),
   sasl: saslSchema.optional(),
+  sendDelayMs: z.number().nonnegative('sendDelayMs must be non-negative'),
+  user: z.string().min(1, 'user is required and must be non-empty'),
 })
 
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>
@@ -58,17 +58,17 @@ export function resolveConfig(input: RuntimeInputConfig): RuntimeConfig {
   const parsed = runtimeInputConfigSchema.parse(input)
 
   // Resolve defaults that depend on other fields.
-  const nick = parsed.nick
+  const { nick } = parsed
   const user = parsed.user ?? nick
   const realname = parsed.realname ?? nick
 
   const config: RuntimeConfig = {
     nick,
-    user,
-    realname,
     password: parsed.password,
-    sendDelayMs: parsed.sendDelayMs ?? DEFAULT_DELAYMS,
+    realname,
     requestedCapabilities: [...DEFAULT_CAPABILITIES],
+    sendDelayMs: parsed.sendDelayMs ?? DEFAULT_DELAYMS,
+    user,
     ...(parsed.sasl ? { sasl: parsed.sasl } : {}),
   }
 

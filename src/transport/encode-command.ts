@@ -13,7 +13,7 @@ export function encodeCommand(command: IrcCommand): string {
   }
 
   const head = command.params.slice(0, -1)
-  const tail = command.params[command.params.length - 1] ?? ''
+  const tail = command.params.at(-1) ?? ''
 
   let line = buildLine(command.command, head)
   line += ` :${tail}`

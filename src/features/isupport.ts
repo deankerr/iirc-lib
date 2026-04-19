@@ -20,22 +20,24 @@ function unescapeIsupportValue(value: string): string {
   while (i < value.length) {
     if (value[i] === '\\' && i + 3 < value.length && value[i + 1] === 'x') {
       const hex = value.slice(i + 2, i + 4)
-      const code = parseInt(hex, 16)
+      const code = Number.parseInt(hex, 16)
       if (!Number.isNaN(code)) {
-        result += String.fromCharCode(code)
+        result += String.fromCodePoint(code)
         i += 4
         continue
       }
     }
     result += value[i]
-    i++
+    i += 1
   }
   return result
 }
 
 export function isupport(runtime: Runtime): void {
   runtime.on('message', (message) => {
-    if (message.command !== runtime.numerics.RPL_ISUPPORT) return
+    if (message.command !== runtime.numerics.RPL_ISUPPORT) {
+      return
+    }
 
     for (const token of message.params.slice(1, -1)) {
       // Negation tokens remove a previously advertised parameter. The client

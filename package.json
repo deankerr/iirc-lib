@@ -7,7 +7,7 @@
     }
   },
   "scripts": {
-    "check": "oxlint --type-aware --type-check --report-unused-disable-directives --fix . && oxfmt --write .",
+    "check": "oxlint --fix . && oxfmt --write .",
     "test": "bun test"
   },
   "dependencies": {

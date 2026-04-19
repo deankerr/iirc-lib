@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { type RuntimeInputConfig } from '../config'
+import type { RuntimeInputConfig } from '../config'
 import { createMockTransport } from '../mock-transport'
 import { createRuntime } from '../runtime'
 
@@ -28,7 +28,7 @@ function createHarness(configOverrides: Partial<RuntimeInputConfig> = {}) {
   // Clear the initial registration burst (CAP LS, PASS?, NICK, USER).
   transport.sentLines.length = 0
 
-  return { runtime, transport, sentLines: transport.sentLines, errors }
+  return { errors, runtime, sentLines: transport.sentLines, transport }
 }
 
 // --- Helpers for common server-sent IRC lines ---
@@ -106,7 +106,7 @@ describe('registration', () => {
   describe('CAP continuation lines', () => {
     test('accumulates multi-line CAP LS before requesting', () => {
       const { transport, sentLines } = createHarness({
-        sasl: { username: 'bot', password: 'hunter2' },
+        sasl: { password: 'hunter2', username: 'bot' },
       })
 
       transport.receive(capLsContinuation('testbot', 'message-tags'))
@@ -120,7 +120,7 @@ describe('registration', () => {
 
     test('accumulates multi-line CAP ACK before SASL', () => {
       const { transport, sentLines } = createHarness({
-        sasl: { username: 'bot', password: 'hunter2' },
+        sasl: { password: 'hunter2', username: 'bot' },
       })
 
       transport.receive(capLs('testbot', 'message-tags sasl'))
@@ -138,7 +138,7 @@ describe('registration', () => {
   describe('SASL PLAIN happy path', () => {
     test('full SASL PLAIN flow', () => {
       const { transport, sentLines, runtime } = createHarness({
-        sasl: { username: 'jilles', password: 'sesame' },
+        sasl: { password: 'sesame', username: 'jilles' },
       })
 
       // Initial registration burst was sent and cleared.
@@ -169,7 +169,7 @@ describe('registration', () => {
       // of requested caps with available caps won't include sasl, so no
       // SASL flow occurs → CAP END immediately after ACK.
       const { transport, sentLines } = createHarness({
-        sasl: { username: 'bot', password: 'pw' },
+        sasl: { password: 'pw', username: 'bot' },
       })
 
       transport.receive(capLs('testbot', 'message-tags'))
@@ -199,7 +199,7 @@ describe('registration', () => {
   describe('SASL PLAIN payload chunking', () => {
     test('payload under 400 bytes sends single AUTHENTICATE command', () => {
       const { transport, sentLines } = createHarness({
-        sasl: { username: 'bot', password: 'short' },
+        sasl: { password: 'short', username: 'bot' },
       })
 
       transport.receive(capLs('testbot', 'sasl'))
@@ -211,8 +211,9 @@ describe('registration', () => {
 
       // Single AUTHENTICATE line, no trailing + marker.
       expect(sentLines).toHaveLength(1)
-      expect(sentLines[0]!.startsWith('AUTHENTICATE ')).toBe(true)
-      const payload = sentLines[0]!.slice('AUTHENTICATE '.length)
+      const [firstLine = ''] = sentLines
+      expect(firstLine.startsWith('AUTHENTICATE ')).toBe(true)
+      const payload = firstLine.slice('AUTHENTICATE '.length)
       expect(payload.length).toBeLessThanOrEqual(400)
       expect(payload).not.toBe('+')
     })
@@ -221,7 +222,7 @@ describe('registration', () => {
       // btoa("\x00<user>\x00<pw>") where pw is 500 chars → base64 ~ 700 bytes.
       const longPassword = 'A'.repeat(500)
       const { transport, sentLines } = createHarness({
-        sasl: { username: 'user', password: longPassword },
+        sasl: { password: longPassword, username: 'user' },
       })
 
       transport.receive(capLs('testbot', 'sasl'))
@@ -240,14 +241,14 @@ describe('registration', () => {
       }
 
       // First chunks should be exactly 400 chars of base64.
-      for (let i = 0; i < sentLines.length - 1; i++) {
-        const payload = sentLines[i]!.slice('AUTHENTICATE '.length)
+      for (let i = 0; i < sentLines.length - 1; i += 1) {
+        const payload = sentLines[i]?.slice('AUTHENTICATE '.length) ?? ''
         expect(payload.length).toBe(400)
       }
 
       // Last chunk is either < 400 bytes of base64, or "+" if previous was
       // exactly 400.
-      const lastPayload = sentLines[sentLines.length - 1]!.slice('AUTHENTICATE '.length)
+      const lastPayload = sentLines.at(-1)?.slice('AUTHENTICATE '.length) ?? ''
       expect(lastPayload === '+' || lastPayload.length < 400).toBe(true)
     })
 
@@ -259,7 +260,7 @@ describe('registration', () => {
       const user = 'u'
       const password = 'x'.repeat(297)
       const { transport, sentLines } = createHarness({
-        sasl: { username: user, password },
+        sasl: { password, username: user },
       })
 
       transport.receive(capLs('testbot', 'sasl'))
@@ -271,7 +272,7 @@ describe('registration', () => {
 
       // Two lines: the 400-byte chunk, then "+".
       expect(sentLines).toHaveLength(2)
-      const payload = sentLines[0]!.slice('AUTHENTICATE '.length)
+      const payload = sentLines[0]?.slice('AUTHENTICATE '.length) ?? ''
       expect(payload.length).toBe(400)
       expect(sentLines[1]).toBe('AUTHENTICATE +')
     })
@@ -280,7 +281,7 @@ describe('registration', () => {
   describe('SASL error paths', () => {
     function setupSaslAuthenticating() {
       const harness = createHarness({
-        sasl: { username: 'bot', password: 'pw' },
+        sasl: { password: 'pw', username: 'bot' },
       })
       harness.transport.receive(capLs('testbot', 'sasl'))
       harness.sentLines.length = 0
@@ -302,7 +303,7 @@ describe('registration', () => {
       transport.receive(':irc.example.com 904 testbot :SASL authentication failed')
 
       expect(errors).toHaveLength(1)
-      expect(errors[0]!.message).toContain('904')
+      expect(errors[0]?.message).toContain('904')
       expect(sentLines).toEqual([])
     })
 
@@ -312,7 +313,7 @@ describe('registration', () => {
       transport.receive(':irc.example.com 904 testbot :SASL authentication failed')
 
       expect(errors).toHaveLength(1)
-      expect(errors[0]!.message).toContain('904')
+      expect(errors[0]?.message).toContain('904')
       expect(sentLines).toEqual([])
     })
 
@@ -322,7 +323,7 @@ describe('registration', () => {
       transport.receive(':irc.example.com 908 testbot EXTERNAL :are available SASL mechanisms')
 
       expect(errors).toHaveLength(1)
-      expect(errors[0]!.message).toContain('908')
+      expect(errors[0]?.message).toContain('908')
       expect(sentLines).toEqual([])
     })
 
@@ -332,7 +333,7 @@ describe('registration', () => {
       transport.receive(':irc.example.com 902 testbot :You must use a nick assigned to you')
 
       expect(errors).toHaveLength(1)
-      expect(errors[0]!.message).toContain('902')
+      expect(errors[0]?.message).toContain('902')
       expect(sentLines).toEqual([])
     })
 
@@ -342,7 +343,7 @@ describe('registration', () => {
       transport.receive(':irc.example.com 905 testbot :SASL message too long')
 
       expect(errors).toHaveLength(1)
-      expect(errors[0]!.message).toContain('905')
+      expect(errors[0]?.message).toContain('905')
       expect(sentLines).toEqual([])
     })
   })
@@ -350,7 +351,7 @@ describe('registration', () => {
   describe('edge cases', () => {
     test('NOTICE during authenticating state is ignored by registration', () => {
       const { transport, sentLines } = createHarness({
-        sasl: { username: 'bot', password: 'pw' },
+        sasl: { password: 'pw', username: 'bot' },
       })
 
       transport.receive(capLs('testbot', 'sasl'))
@@ -369,7 +370,7 @@ describe('registration', () => {
 
     test('messages after done state are ignored', () => {
       const { transport, sentLines } = createHarness({
-        sasl: { username: 'bot', password: 'pw' },
+        sasl: { password: 'pw', username: 'bot' },
       })
 
       // Full happy path to done.
@@ -391,7 +392,7 @@ describe('registration', () => {
 
     test('messages after error state are ignored', () => {
       const { transport, sentLines, errors } = createHarness({
-        sasl: { username: 'bot', password: 'pw' },
+        sasl: { password: 'pw', username: 'bot' },
       })
 
       transport.receive(capLs('testbot', 'sasl'))
@@ -430,7 +431,7 @@ describe('registration', () => {
 
     test('cap value suffixes are stripped in LS', () => {
       const { transport, sentLines } = createHarness({
-        sasl: { username: 'bot', password: 'pw' },
+        sasl: { password: 'pw', username: 'bot' },
       })
 
       // sasl=PLAIN,EXTERNAL → stripped to "sasl" for matching.

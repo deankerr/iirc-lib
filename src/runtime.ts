@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 
-import { resolveConfig, type RuntimeConfig, type RuntimeInputConfig } from './config'
+import { resolveConfig } from './config'
+import type { RuntimeConfig, RuntimeInputConfig } from './config'
 import { identity } from './features/identity'
 import { isupport } from './features/isupport'
 import { ping } from './features/ping'
@@ -39,6 +40,36 @@ export type ParsedSource = {
   host?: string
 }
 
+function parseSourceValue(source: string | undefined): ParsedSource | undefined {
+  if (!source) {
+    return undefined
+  }
+
+  const bangIndex = source.indexOf('!')
+  const atIndex = source.indexOf('@')
+
+  let nickEnd = source.length
+  if (bangIndex !== -1) {
+    nickEnd = bangIndex
+  } else if (atIndex !== -1) {
+    nickEnd = atIndex
+  }
+
+  const nick = nickEnd > 0 ? source.slice(0, nickEnd) : undefined
+
+  const userStart = bangIndex === -1 ? -1 : bangIndex + 1
+  const userEnd = atIndex === -1 ? source.length : atIndex
+  const user =
+    userStart === -1 || userEnd <= userStart ? undefined : source.slice(userStart, userEnd)
+
+  const host = atIndex === -1 ? undefined : source.slice(atIndex + 1) || undefined
+
+  if (!nick && !user && !host) {
+    return undefined
+  }
+  return { host, nick, user }
+}
+
 export class Runtime extends EventEmitter<RuntimeEvents> {
   readonly numerics = Numeric
 
@@ -48,6 +79,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   readonly connectionState: ConnectionState
   readonly activeCaps = new Set<string>()
   readonly isupport = new Map<string, string | true>()
+  private readonly sourceParser = parseSourceValue
   private started = false
 
   constructor(config: RuntimeConfig, transport: Transport, features = defaultRuntimeFeatures) {
@@ -103,23 +135,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   }
 
   parseSource(source: string | undefined): ParsedSource | undefined {
-    if (!source) return undefined
-
-    const bangIndex = source.indexOf('!')
-    const atIndex = source.indexOf('@')
-
-    const nickEnd = bangIndex === -1 ? (atIndex === -1 ? source.length : atIndex) : bangIndex
-    const nick = nickEnd > 0 ? source.slice(0, nickEnd) : undefined
-
-    const userStart = bangIndex === -1 ? -1 : bangIndex + 1
-    const userEnd = atIndex === -1 ? source.length : atIndex
-    const user =
-      userStart === -1 || userEnd <= userStart ? undefined : source.slice(userStart, userEnd)
-
-    const host = atIndex === -1 ? undefined : source.slice(atIndex + 1) || undefined
-
-    if (!nick && !user && !host) return undefined
-    return { nick, user, host }
+    return this.sourceParser(source)
   }
 
   parseSourceNick(source: string | undefined): string | undefined {
@@ -151,19 +167,21 @@ function foldCaseMapping(value: string, caseMapping: string | true | undefined):
   const mapping = typeof caseMapping === 'string' ? caseMapping.toLowerCase() : 'rfc1459'
 
   switch (mapping) {
-    case 'rfc1459':
+    case 'rfc1459': {
       return asciiFolded
         .replaceAll('[', '{')
         .replaceAll(']', '}')
         .replaceAll('\\', '|')
         .replaceAll('~', '^')
+    }
 
-    case 'rfc1459-strict':
+    case 'rfc1459-strict': {
       return asciiFolded.replaceAll('[', '{').replaceAll(']', '}').replaceAll('\\', '|')
+    }
 
-    case 'ascii':
-    default:
+    default: {
       return asciiFolded
+    }
   }
 }
 

@@ -26,16 +26,21 @@ function parseCapNames(capsString: string): string[] {
   return capsString
     .split(' ')
     .filter((cap) => cap.length > 0)
-    .map((cap) => cap.split('=')[0]!)
+    .map((cap) => {
+      const [name = ''] = cap.split('=')
+      return name
+    })
 }
 
 // CAP is unusual in IRC: the subcommand lives in params[1], and multi-line
 // replies move the capability string from params[2] to params[3]. Normalize
 // that layout so the state machine can reason in terms of LS/ACK/NAK.
 function parseCapMessage(message: IrcMessage): ParsedCapMessage {
-  if (message.command !== 'CAP') return undefined
+  if (message.command !== 'CAP') {
+    return undefined
+  }
 
-  const subcommand = message.params[1]
+  const [, subcommand] = message.params
   if (subcommand !== 'LS' && subcommand !== 'ACK' && subcommand !== 'NAK') {
     return undefined
   }
@@ -44,9 +49,9 @@ function parseCapMessage(message: IrcMessage): ParsedCapMessage {
   const capsString = hasContinuation ? (message.params[3] ?? '') : (message.params[2] ?? '')
 
   return {
-    subcommand,
-    names: parseCapNames(capsString),
     hasContinuation,
+    names: parseCapNames(capsString),
+    subcommand,
   }
 }
 
@@ -66,7 +71,7 @@ function applyAckCaps(runtime: Runtime, caps: string[]): void {
 // RFC 4616: authzid NUL authcid NUL password. Empty authzid is the common
 // case (server infers authorization identity from authentication identity).
 function encodeSaslPlain(username: string, password: string): string {
-  return btoa(`\x00${username}\x00${password}`)
+  return btoa(`\u0000${username}\u0000${password}`)
 }
 
 // Base64 payload must be split into ≤400-byte AUTHENTICATE commands.
@@ -77,12 +82,11 @@ function chunkPayload(base64: string): string[] {
   const chunks: string[] = []
 
   for (let i = 0; i < base64.length; i += CHUNK_SIZE) {
-    chunks.push(base64.slice(i, i + CHUNK_SIZE)!)
+    chunks.push(base64.slice(i, i + CHUNK_SIZE))
   }
 
   // Final chunk of exactly CHUNK_SIZE bytes needs a trailing "+" marker.
-  const lastChunk = chunks[chunks.length - 1]!
-  if (lastChunk.length === CHUNK_SIZE) {
+  if (chunks.at(-1)?.length === CHUNK_SIZE) {
     chunks.push('+')
   }
 
@@ -90,7 +94,7 @@ function chunkPayload(base64: string): string[] {
 }
 
 export function registration(runtime: Runtime): void {
-  const config = runtime.config
+  const { config } = runtime
   let state: State = 'collecting_ls'
   const availableCaps = new Set<string>()
 
@@ -98,7 +102,9 @@ export function registration(runtime: Runtime): void {
   // CAP LS suspends registration server-side until CAP END.
   runtime.on('register', () => {
     runtime.send('CAP', 'LS', '302')
-    if (config.password) runtime.send('PASS', config.password)
+    if (config.password) {
+      runtime.send('PASS', config.password)
+    }
     runtime.send('NICK', config.nick)
     runtime.sendCommand({
       command: 'USER',
@@ -119,11 +125,19 @@ export function registration(runtime: Runtime): void {
       // 001 guarantees the assigned initial nick. Some networks also include
       // nick!user@host in the trailing welcome text, which we treat as
       // best-effort enrichment rather than a protocol guarantee.
-      const nick = message.params[0]
-      if (nick) runtime.connectionState.nick = nick
-      if (self?.user) runtime.connectionState.user = self.user
-      if (self?.host) runtime.connectionState.host = self.host
-      if (message.source) runtime.connectionState.serverHost = message.source
+      const [nick] = message.params
+      if (nick) {
+        runtime.connectionState.nick = nick
+      }
+      if (self?.user) {
+        runtime.connectionState.user = self.user
+      }
+      if (self?.host) {
+        runtime.connectionState.host = self.host
+      }
+      if (message.source) {
+        runtime.connectionState.serverHost = message.source
+      }
 
       runtime.connectionState.registered = true
       runtime.emit('registered')
@@ -137,9 +151,11 @@ export function registration(runtime: Runtime): void {
       return
     }
 
-    if (state === 'done' || state === 'error') return
+    if (state === 'done' || state === 'error') {
+      return
+    }
 
-    const cap = parseCapMessage(message)
+    const capMessage = parseCapMessage(message)
 
     // --- CAP LS (all states) ---
 
@@ -148,17 +164,23 @@ export function registration(runtime: Runtime): void {
     // params[0] = nick (or *), params[1] = subcommand,
     // params[2] = * (continuation) or caps string,
     // params[3] = caps string (when continuation).
-    if (cap?.subcommand === 'LS') {
+    if (capMessage?.subcommand === 'LS') {
       // Accumulate LS caps across continuation lines so the final line can
       // compute the intersection with what the client requested.
-      for (const name of cap.names) availableCaps.add(name)
+      for (const name of capMessage.names) {
+        availableCaps.add(name)
+      }
 
       // Continuation lines are just accumulation — stay in current state.
-      if (cap.hasContinuation) return
+      if (capMessage.hasContinuation) {
+        return
+      }
 
       // Only the initial registration LS should decide whether we request any
       // capabilities or finish negotiation immediately.
-      if (state !== 'collecting_ls') return
+      if (state !== 'collecting_ls') {
+        return
+      }
 
       const requested = config.requestedCapabilities
       const capsToRequest = requested.filter((cap) => availableCaps.has(cap))
@@ -180,16 +202,20 @@ export function registration(runtime: Runtime): void {
 
     // --- CAP ACK (all states) ---
 
-    if (cap?.subcommand === 'ACK') {
+    if (capMessage?.subcommand === 'ACK') {
       // ACK lines are final for the caps they mention, even if they arrive
       // outside the narrow registration step this machine advances through.
-      applyAckCaps(runtime, cap.names)
+      applyAckCaps(runtime, capMessage.names)
 
       // Continuation lines are just accumulation — stay in current state.
-      if (cap.hasContinuation) return
+      if (capMessage.hasContinuation) {
+        return
+      }
 
       // Only the ACK for our registration REQ should advance registration.
-      if (state !== 'awaiting_ack') return
+      if (state !== 'awaiting_ack') {
+        return
+      }
 
       // SASL must complete before CAP END. If the server acknowledged
       // sasl and we have credentials, begin authentication.
@@ -206,9 +232,11 @@ export function registration(runtime: Runtime): void {
 
     // --- CAP NAK (registration REQ reply only) ---
 
-    if (cap?.subcommand === 'NAK') {
+    if (capMessage?.subcommand === 'NAK') {
       // Only the NAK for our registration REQ should terminate this machine.
-      if (state !== 'awaiting_ack') return
+      if (state !== 'awaiting_ack') {
+        return
+      }
 
       state = 'error'
       return
@@ -218,9 +246,16 @@ export function registration(runtime: Runtime): void {
     // Server accepts our PLAIN mechanism and is ready for the payload.
 
     if (state === 'authenticating' && message.command === 'AUTHENTICATE') {
-      if (message.params[0] !== '+') return
+      if (message.params[0] !== '+') {
+        return
+      }
 
-      const payload = encodeSaslPlain(config.sasl!.username, config.sasl!.password)
+      const saslConfig = config.sasl
+      if (!saslConfig) {
+        return
+      }
+
+      const payload = encodeSaslPlain(saslConfig.username, saslConfig.password)
       for (const chunk of chunkPayload(payload)) {
         runtime.send('AUTHENTICATE', chunk)
       }
@@ -265,7 +300,6 @@ export function registration(runtime: Runtime): void {
     if (state === 'authenticating' && message.command === runtime.numerics.RPL_SASLMECHS) {
       runtime.emit('error', new Error('SASL PLAIN not supported by server (908)'))
       state = 'error'
-      return
     }
   })
 }

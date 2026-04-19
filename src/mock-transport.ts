@@ -6,10 +6,6 @@ export function createMockTransport() {
   const sentLines: string[] = []
 
   const stream = {
-    setEncoding(_encoding: string) {
-      // The mock always operates on strings, so there is nothing to configure.
-    },
-
     on(event: string, handler: (...args: unknown[]) => void) {
       emitter.on(event, handler)
       return this
@@ -18,6 +14,10 @@ export function createMockTransport() {
     removeListener(event: string, handler: (...args: unknown[]) => void) {
       emitter.removeListener(event, handler)
       return this
+    },
+
+    setEncoding(_encoding: string) {
+      // The mock always operates on strings, so there is nothing to configure.
     },
 
     write(data: string) {
@@ -31,8 +31,12 @@ export function createMockTransport() {
   }
 
   return {
-    stream: stream as unknown as Duplex,
-    sentLines,
+    close() {
+      emitter.emit('close')
+    },
+    error(error: Error) {
+      emitter.emit('error', error)
+    },
 
     receive(lines: string | readonly string[]) {
       const batch = Array.isArray(lines) ? lines : [lines]
@@ -41,12 +45,8 @@ export function createMockTransport() {
       }
     },
 
-    close() {
-      emitter.emit('close')
-    },
+    sentLines,
 
-    error(error: Error) {
-      emitter.emit('error', error)
-    },
+    stream: stream as unknown as Duplex,
   }
 }
