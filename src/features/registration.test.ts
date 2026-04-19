@@ -4,7 +4,7 @@ import { type RuntimeInputConfig } from '../config'
 import { createMockTransport } from '../mock-transport'
 import { createRuntime } from '../runtime'
 
-// Harness wraps a Runtime + mock transport, starts the session immediately, and records
+// Harness wraps a Runtime + mock transport, registers the session immediately, and records
 // sent lines and emitted errors. Callers drive the machine by calling
 // transport.receive() with server-sent IRC lines and asserting on sentLines
 // and errors.
@@ -21,6 +21,9 @@ function createHarness(configOverrides: Partial<RuntimeInputConfig> = {}) {
   const errors: Error[] = []
 
   runtime.on('error', (error) => errors.push(error))
+
+  // Register explicitly so tests can inspect the initial registration burst.
+  runtime.register()
 
   // Clear the initial registration burst (CAP LS, PASS?, NICK, USER).
   transport.sentLines.length = 0
@@ -410,7 +413,7 @@ describe('registration', () => {
 
     test('PASS is sent when password is configured', () => {
       const transport2 = createMockTransport()
-      createRuntime(
+      const runtime = createRuntime(
         {
           nick: 'bot',
           password: 'serverpw',
@@ -418,6 +421,8 @@ describe('registration', () => {
         },
         transport2.stream,
       )
+
+      runtime.register()
 
       const initialLines = [...transport2.sentLines]
       expect(initialLines.some((l) => l === 'PASS serverpw')).toBe(true)

@@ -15,7 +15,7 @@ export type RuntimeFeature = (runtime: Runtime) => void
 const defaultRuntimeFeatures: RuntimeFeature[] = [registration, ping, identity, isupport]
 
 export type RuntimeEvents = {
-  attach: [stream: Duplex]
+  register: [stream: Duplex]
   message: [IrcMessage]
   registered: []
   close: []
@@ -48,6 +48,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   readonly connectionState: ConnectionState
   readonly activeCaps = new Set<string>()
   readonly isupport = new Map<string, string | true>()
+  private started = false
 
   constructor(config: RuntimeConfig, transport: Transport, features = defaultRuntimeFeatures) {
     super()
@@ -69,11 +70,17 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     for (const feature of features) {
       feature(this)
     }
+  }
 
-    // Keep the "attach" event name for now as the runtime startup signal.
-    // The runtime is already session-bound at this point, so this fires once
-    // when construction is complete and features are ready to run.
-    this.emit('attach', this.transport.stream)
+  // Registration is explicit so callers can observe transport I/O before the
+  // initial CAP/NICK/USER burst begins.
+  register(): void {
+    if (this.started) {
+      throw new Error('Runtime has already been registered')
+    }
+
+    this.started = true
+    this.emit('register', this.transport.stream)
   }
 
   send(command: string, ...params: ReadonlyArray<string | undefined>): void {
@@ -160,9 +167,8 @@ function foldCaseMapping(value: string, caseMapping: string | true | undefined):
   }
 }
 
-// Default session-construction path. This keeps the common case small while
-// still leaving the raw Runtime + Transport constructor path available for
-// consumers who want to inspect or alter the pieces directly.
+// Default session-construction path. Callers still register the session
+// explicitly so every runtime follows the same observable lifecycle.
 export function createRuntime(
   input: RuntimeInputConfig,
   stream: Duplex,

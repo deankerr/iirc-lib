@@ -14,6 +14,8 @@ describe('Runtime', () => {
       transport.stream,
     )
 
+    runtime.register()
+
     const commands: string[] = []
     runtime.on('message', (message) => {
       commands.push(message.command)
@@ -33,6 +35,8 @@ describe('Runtime', () => {
       },
       transport.stream,
     )
+
+    runtime.register()
 
     let registered = false
     runtime.on('registered', () => {
@@ -56,6 +60,8 @@ describe('Runtime', () => {
       transport.stream,
     )
 
+    runtime.register()
+
     transport.receive(
       ':irc.example.com 001 actualbot :Welcome to the network actualbot!~user@cloak.example',
     )
@@ -67,13 +73,15 @@ describe('Runtime', () => {
 
   test('responds to server PING with PONG during registration', () => {
     const transport = createMockTransport()
-    createRuntime(
+    const runtime = createRuntime(
       {
         nick: 'bot',
         sendDelayMs: 0,
       },
       transport.stream,
     )
+
+    runtime.register()
 
     transport.sentLines.length = 0
 
@@ -91,6 +99,8 @@ describe('Runtime', () => {
       },
       transport.stream,
     )
+
+    runtime.register()
 
     transport.receive(
       ':server 005 bot CASEMAPPING=ascii CHANTYPES=#& NETWORK=ExampleNet :are supported',
@@ -111,6 +121,8 @@ describe('Runtime', () => {
       transport.stream,
     )
 
+    runtime.register()
+
     // Before ISUPPORT, defaults to rfc1459 per modern IRC docs.
     expect(runtime.caseFold('[Foo]')).toBe('{foo}')
     expect(runtime.caseFold('~Foo\\Bar')).toBe('^foo|bar')
@@ -125,6 +137,8 @@ describe('Runtime', () => {
       },
       transport.stream,
     )
+
+    runtime.register()
 
     transport.receive(':server 005 bot CASEMAPPING=rfc1459 :are supported')
 
@@ -141,6 +155,8 @@ describe('Runtime', () => {
       },
       transport.stream,
     )
+
+    runtime.register()
 
     transport.receive(':server 005 bot CASEMAPPING=rfc1459-strict :are supported')
 
@@ -159,6 +175,8 @@ describe('Runtime', () => {
       transport.stream,
     )
 
+    runtime.register()
+
     transport.receive(':server 005 bot CASEMAPPING=ascii :are supported')
 
     expect(runtime.caseFold('[Foo]')).toBe('[foo]')
@@ -174,6 +192,8 @@ describe('Runtime', () => {
       },
       transport.stream,
     )
+
+    runtime.register()
 
     transport.sentLines.length = 0
 

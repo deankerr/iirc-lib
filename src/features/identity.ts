@@ -1,39 +1,15 @@
 import type { Runtime } from '../runtime'
 
-// Tracks who we are on the network: nick, user, host, account, and
-// registration state. Emits 'registered' when 001 arrives.
+// Tracks post-registration identity drift and account state.
 //
-// Protocol ref: Connection Registration (§06), RPL_WELCOME (001),
-// RPL_MYINFO (004), RPL_LOGGEDIN (900), RPL_LOGGEDOUT (901).
+// Protocol ref: NICK, RPL_LOGGEDIN (900), RPL_LOGGEDOUT (901).
 //
 // State values read: runtime.connectionState.nick, runtime.numerics
-// State values set: runtime.connectionState (nick, user, host, serverHost,
-//   serverVersion, registered, account)
-// Events emitted: registered
+// State values set: runtime.connectionState (nick, account)
 
 export function identity(runtime: Runtime): void {
   runtime.on('message', (message) => {
     switch (message.command) {
-      // 001 RPL_WELCOME confirms registration. The first param is the
-      // assigned nickname (may differ from what we requested). The trailing
-      // param may contain nick!user@host.
-      case runtime.numerics.RPL_WELCOME: {
-        const self = runtime.parseSource(message.params.at(-1))
-        runtime.connectionState.nick =
-          message.params[0] ?? self?.nick ?? runtime.connectionState.nick
-        runtime.connectionState.user = self?.user ?? runtime.connectionState.user
-        runtime.connectionState.host = self?.host ?? runtime.connectionState.host
-        runtime.connectionState.registered = true
-        runtime.connectionState.serverHost = message.source ?? runtime.connectionState.serverHost
-        runtime.emit('registered')
-        break
-      }
-
-      case runtime.numerics.RPL_MYINFO:
-        runtime.connectionState.serverVersion =
-          message.params[2] ?? runtime.connectionState.serverVersion
-        break
-
       case 'NICK': {
         const sourceNick = runtime.parseSourceNick(message.source)
         const currentNick = runtime.connectionState.nick

@@ -7,10 +7,9 @@ import { OutputQueue } from './output-queue'
 import { parseMessage } from './parse-message'
 import type { IrcCommand, IrcMessage } from './types'
 
-export type TransportStatus = 'idle' | 'attached' | 'closed' | 'error'
-
 export type TransportEvents = {
-  line: [line: string]
+  read: [line: string]
+  write: [line: string]
   message: [message: IrcMessage]
   close: []
   error: [error: Error]
@@ -26,7 +25,7 @@ export class Transport extends EventEmitter<TransportEvents> {
   private readonly outputQueue: OutputQueue
 
   readonly stream: Duplex
-  private currentStatus: TransportStatus = 'attached'
+  private transportOk = true
 
   private readonly handleDataRef = (chunk: string) => this.handleChunk(chunk)
   private readonly handleCloseRef = () => this.handleClose()
@@ -46,8 +45,8 @@ export class Transport extends EventEmitter<TransportEvents> {
     stream.on('error', this.handleErrorRef)
   }
 
-  get status(): TransportStatus {
-    return this.currentStatus
+  get ok(): boolean {
+    return this.transportOk
   }
 
   send(command: IrcCommand): void {
@@ -60,7 +59,9 @@ export class Transport extends EventEmitter<TransportEvents> {
     for (const line of lines) {
       if (line.length === 0) continue
 
-      this.emit('line', line)
+      // Emit the raw inbound IRC line before parsing so observers can see
+      // exactly what arrived off the wire.
+      this.emit('read', line)
 
       let message: IrcMessage
       try {
@@ -74,37 +75,29 @@ export class Transport extends EventEmitter<TransportEvents> {
   }
 
   private writeLine(line: string): void {
-    if (this.currentStatus !== 'attached') {
-      throw new Error('Transport is not attached to a live stream')
+    if (!this.transportOk) {
+      throw new Error('Transport is no longer ok for writes')
     }
 
+    // Emit the encoded outbound line at the point it actually reaches the
+    // attached stream so observers see real writes, not just enqueue requests.
+    this.emit('write', line)
     this.stream.write(`${line}\r\n`)
   }
 
   private handleClose(): void {
-    this.finish('closed')
+    this.finish()
     this.emit('close')
   }
 
   private handleError(error: Error): void {
-    this.finish('error')
+    this.finish()
     this.emit('error', error)
   }
 
-  private finish(status: TransportStatus): void {
-    this.unbindStream()
+  private finish(): void {
     this.inputBuffer.clear()
     this.outputQueue.clear()
-    this.setStatus(status)
-  }
-
-  private unbindStream(): void {
-    this.stream.removeListener('data', this.handleDataRef)
-    this.stream.removeListener('close', this.handleCloseRef)
-    this.stream.removeListener('error', this.handleErrorRef)
-  }
-
-  private setStatus(status: TransportStatus): void {
-    this.currentStatus = status
+    this.transportOk = false
   }
 }

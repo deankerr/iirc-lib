@@ -1,16 +1,8 @@
 import type { Runtime } from '..'
+import type { IrcMessage } from '../transport'
 
-// Registration state machine. Handles CAP negotiation and SASL
-// authentication from attach through CAP END. Post-registration concerns
-// (001, nick errors, PING) are handled by other features.
-//
-// Protocol ref: Connection Registration (§06), Capability Negotiation (§08),
-// IRCv3 Capability Negotiation, IRCv3 SASL v3.1/v3.2, RFC 4616 (SASL PLAIN).
-//
-// State values read: runtime.activeCaps
-// State values set: runtime.activeCaps
-// Events emitted: error (on SASL failure)
-// Messages sent: CAP LS, PASS, NICK, USER, CAP REQ, CAP END, AUTHENTICATE
+// See registration.md for the protocol notes, state diagram, and feature
+// boundary for this machine.
 
 type State =
   | 'collecting_ls'
@@ -20,15 +12,42 @@ type State =
   | 'done'
   | 'error'
 
+type ParsedCapMessage =
+  | {
+      subcommand: 'LS' | 'ACK' | 'NAK'
+      names: string[]
+      hasContinuation: boolean
+    }
+  | undefined
+
 // Strip value suffixes from caps (e.g. "sasl=PLAIN,EXTERNAL" → "sasl").
 // ACK caps may carry a "-" prefix (disabled cap) — preserved as-is.
-
 function parseCapNames(capsString: string): string[] {
-  if (!capsString) return []
   return capsString
     .split(' ')
     .filter((cap) => cap.length > 0)
     .map((cap) => cap.split('=')[0]!)
+}
+
+// CAP is unusual in IRC: the subcommand lives in params[1], and multi-line
+// replies move the capability string from params[2] to params[3]. Normalize
+// that layout so the state machine can reason in terms of LS/ACK/NAK.
+function parseCapMessage(message: IrcMessage): ParsedCapMessage {
+  if (message.command !== 'CAP') return undefined
+
+  const subcommand = message.params[1]
+  if (subcommand !== 'LS' && subcommand !== 'ACK' && subcommand !== 'NAK') {
+    return undefined
+  }
+
+  const hasContinuation = message.params[2] === '*'
+  const capsString = hasContinuation ? (message.params[3] ?? '') : (message.params[2] ?? '')
+
+  return {
+    subcommand,
+    names: parseCapNames(capsString),
+    hasContinuation,
+  }
 }
 
 // Apply acknowledged caps directly to runtime.activeCaps. No buffering
@@ -77,7 +96,7 @@ export function registration(runtime: Runtime): void {
 
   // Registration order per spec: CAP LS, PASS, NICK, USER.
   // CAP LS suspends registration server-side until CAP END.
-  runtime.on('attach', () => {
+  runtime.on('register', () => {
     runtime.send('CAP', 'LS', '302')
     if (config.password) runtime.send('PASS', config.password)
     runtime.send('NICK', config.nick)
@@ -91,73 +110,107 @@ export function registration(runtime: Runtime): void {
   // State diagram is documented in state-machine.md. Unrecognised messages
   // in any state are ignored — the machine stays put and waits.
   runtime.on('message', (message) => {
+    // 001 RPL_WELCOME confirms registration. The first param is the
+    // assigned nickname (may differ from what we requested). The trailing
+    // param may contain nick!user@host.
+    if (message.command === runtime.numerics.RPL_WELCOME) {
+      const self = runtime.parseSource(message.params.at(-1))
+
+      // 001 guarantees the assigned initial nick. Some networks also include
+      // nick!user@host in the trailing welcome text, which we treat as
+      // best-effort enrichment rather than a protocol guarantee.
+      const nick = message.params[0]
+      if (nick) runtime.connectionState.nick = nick
+      if (self?.user) runtime.connectionState.user = self.user
+      if (self?.host) runtime.connectionState.host = self.host
+      if (message.source) runtime.connectionState.serverHost = message.source
+
+      runtime.connectionState.registered = true
+      runtime.emit('registered')
+      return
+    }
+
+    // 004 RPL_MYINFO is part of the required post-registration burst.
+    if (message.command === runtime.numerics.RPL_MYINFO) {
+      runtime.connectionState.serverVersion =
+        message.params[2] ?? runtime.connectionState.serverVersion
+      return
+    }
+
     if (state === 'done' || state === 'error') return
 
-    // --- CAP messages (all states) ---
+    const cap = parseCapMessage(message)
 
-    if (message.command === 'CAP') {
-      const subcommand = message.params[1]
-      if (!subcommand) return
+    // --- CAP LS (all states) ---
 
-      // CAP message format (server-sent):
-      //   CAP <nick> <subcommand> [*] :<caps>
-      // params[0] = nick (or *), params[1] = subcommand,
-      // params[2] = * (continuation) or caps string,
-      // params[3] = caps string (when continuation).
-      const hasContinuation = message.params[2] === '*'
-      const capsString = hasContinuation ? (message.params[3] ?? '') : (message.params[2] ?? '')
-      const caps = parseCapNames(capsString)
-
-      // Accumulate. LS caps go into availableCaps for later intersection;
-      // ACK caps go straight into runtime.activeCaps.
-      if (subcommand === 'LS') {
-        for (const cap of caps) availableCaps.add(cap)
-      } else if (subcommand === 'ACK') {
-        applyAckCaps(runtime, caps)
-      }
+    // CAP message format (server-sent):
+    //   CAP <nick> <subcommand> [*] :<caps>
+    // params[0] = nick (or *), params[1] = subcommand,
+    // params[2] = * (continuation) or caps string,
+    // params[3] = caps string (when continuation).
+    if (cap?.subcommand === 'LS') {
+      // Accumulate LS caps across continuation lines so the final line can
+      // compute the intersection with what the client requested.
+      for (const name of cap.names) availableCaps.add(name)
 
       // Continuation lines are just accumulation — stay in current state.
-      if (hasContinuation) return
+      if (cap.hasContinuation) return
 
-      // Final line: state-specific action.
-      if (state === 'collecting_ls' && subcommand === 'LS') {
-        const requested = config.requestedCapabilities
-        const capsToRequest = requested.filter((cap) => availableCaps.has(cap))
+      // Only the initial registration LS should decide whether we request any
+      // capabilities or finish negotiation immediately.
+      if (state !== 'collecting_ls') return
 
-        if (capsToRequest.length === 0) {
-          runtime.send('CAP', 'END')
-          state = 'done'
-          return
-        }
+      const requested = config.requestedCapabilities
+      const capsToRequest = requested.filter((cap) => availableCaps.has(cap))
 
-        runtime.sendCommand({
-          command: 'CAP',
-          params: ['REQ', capsToRequest.join(' ')],
-          trailing: true,
-        })
-        state = 'awaiting_ack'
-        return
-      }
-
-      if (state === 'awaiting_ack' && subcommand === 'ACK') {
-        // SASL must complete before CAP END. If the server acknowledged
-        // sasl and we have credentials, begin authentication.
-        if (config.sasl && runtime.activeCaps.has('sasl')) {
-          runtime.send('AUTHENTICATE', 'PLAIN')
-          state = 'authenticating'
-          return
-        }
-
+      if (capsToRequest.length === 0) {
         runtime.send('CAP', 'END')
         state = 'done'
         return
       }
 
-      if (state === 'awaiting_ack' && subcommand === 'NAK') {
-        state = 'error'
+      runtime.sendCommand({
+        command: 'CAP',
+        params: ['REQ', capsToRequest.join(' ')],
+        trailing: true,
+      })
+      state = 'awaiting_ack'
+      return
+    }
+
+    // --- CAP ACK (all states) ---
+
+    if (cap?.subcommand === 'ACK') {
+      // ACK lines are final for the caps they mention, even if they arrive
+      // outside the narrow registration step this machine advances through.
+      applyAckCaps(runtime, cap.names)
+
+      // Continuation lines are just accumulation — stay in current state.
+      if (cap.hasContinuation) return
+
+      // Only the ACK for our registration REQ should advance registration.
+      if (state !== 'awaiting_ack') return
+
+      // SASL must complete before CAP END. If the server acknowledged
+      // sasl and we have credentials, begin authentication.
+      if (config.sasl && runtime.activeCaps.has('sasl')) {
+        runtime.send('AUTHENTICATE', 'PLAIN')
+        state = 'authenticating'
         return
       }
 
+      runtime.send('CAP', 'END')
+      state = 'done'
+      return
+    }
+
+    // --- CAP NAK (registration REQ reply only) ---
+
+    if (cap?.subcommand === 'NAK') {
+      // Only the NAK for our registration REQ should terminate this machine.
+      if (state !== 'awaiting_ack') return
+
+      state = 'error'
       return
     }
 

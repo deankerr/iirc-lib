@@ -6,6 +6,8 @@ import { createRuntime } from '../runtime'
 function createClient() {
   const transport = createMockTransport()
   const runtime = createRuntime({ nick: 'testbot', sendDelayMs: 0 }, transport.stream)
+
+  runtime.register()
   transport.sentLines.length = 0
   return { runtime, transport }
 }
