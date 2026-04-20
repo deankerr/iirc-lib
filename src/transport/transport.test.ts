@@ -18,7 +18,6 @@ describe('Transport', () => {
     transport.send({
       command: 'PRIVMSG',
       params: ['#dev', 'hello world'],
-      trailing: true,
     })
 
     expect(writes).toEqual(['PRIVMSG #dev :hello world'])

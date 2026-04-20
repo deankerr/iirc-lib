@@ -34,6 +34,24 @@ describe('encodeCommand', () => {
     expect(supportedCases.length).toBeGreaterThan(0)
   })
 
+  test('does not force a trailing marker when the last param is a single token', () => {
+    expect(
+      encodeCommand({
+        command: 'CAP',
+        params: ['REQ', 'message-tags'],
+      }),
+    ).toBe('CAP REQ message-tags')
+  })
+
+  test('still uses a trailing marker when the last param needs one', () => {
+    expect(
+      encodeCommand({
+        command: 'CAP',
+        params: ['REQ', 'message-tags sasl'],
+      }),
+    ).toBe('CAP REQ :message-tags sasl')
+  })
+
   for (const [index, { desc, atoms, matches }] of supportedCases.entries()) {
     const label = desc ?? atoms.verb
 

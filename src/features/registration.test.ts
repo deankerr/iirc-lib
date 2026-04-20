@@ -71,7 +71,7 @@ describe('registration', () => {
 
       transport.receive(capLs('testbot', 'message-tags'))
 
-      expect(sentLines).toEqual(['CAP REQ :message-tags'])
+      expect(sentLines).toEqual(['CAP REQ message-tags'])
 
       sentLines.length = 0
       transport.receive(capAck('testbot', 'message-tags'))
@@ -173,7 +173,7 @@ describe('registration', () => {
       })
 
       transport.receive(capLs('testbot', 'message-tags'))
-      expect(sentLines).toEqual(['CAP REQ :message-tags'])
+      expect(sentLines).toEqual(['CAP REQ message-tags'])
 
       sentLines.length = 0
       transport.receive(capAck('testbot', 'message-tags'))
@@ -188,7 +188,7 @@ describe('registration', () => {
 
       transport.receive(capLs('testbot', 'message-tags sasl'))
       // Default config only requests message-tags (no sasl config → no auto-include).
-      expect(sentLines).toEqual(['CAP REQ :message-tags'])
+      expect(sentLines).toEqual(['CAP REQ message-tags'])
 
       sentLines.length = 0
       transport.receive(capAck('testbot', 'message-tags'))
@@ -438,7 +438,7 @@ describe('registration', () => {
       // Server only advertises sasl (not message-tags), so intersection
       // of ['message-tags', 'sasl'] ∩ {sasl} = ['sasl'].
       transport.receive(capLs('testbot', 'sasl=PLAIN,EXTERNAL'))
-      expect(sentLines).toEqual(['CAP REQ :sasl'])
+      expect(sentLines).toEqual(['CAP REQ sasl'])
     })
 
     test('ACK caps with dash prefix are handled as disabled', () => {

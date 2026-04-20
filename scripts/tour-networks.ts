@@ -112,7 +112,7 @@ async function runSession(
         }
 
         quitSent = true
-        runtime.sendCommand({ command: 'QUIT', params: [QUIT_MESSAGE], trailing: true })
+        runtime.send({ command: 'QUIT', params: [QUIT_MESSAGE] })
         scheduleQuit()
       }, SESSION_TIMEOUT_MS)
     }

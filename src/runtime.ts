@@ -119,16 +119,22 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     this.emit('register', this.transport.stream)
   }
 
-  send(command: string, ...params: ReadonlyArray<string | undefined>): void {
-    const definedParams = params.filter((param): param is string => param !== undefined)
-    this.sendCommand({
-      command,
-      params: definedParams,
-    })
-  }
+  // Runtime exposes one outbound entry point with two call shapes:
+  // a shorthand string + params form for common commands, and the canonical
+  // IrcCommand object when callers already have a full command shape.
+  send(command: string, ...params: ReadonlyArray<string | undefined>): void
+  send(command: IrcCommand): void
+  send(commandOrMessage: string | IrcCommand, ...params: ReadonlyArray<string | undefined>): void {
+    if (typeof commandOrMessage === 'string') {
+      const definedParams = params.filter((param): param is string => param !== undefined)
+      this.transport.send({
+        command: commandOrMessage,
+        params: definedParams,
+      })
+      return
+    }
 
-  sendCommand(command: IrcCommand): void {
-    this.transport.send(command)
+    this.transport.send(commandOrMessage)
   }
 
   // Fold a value using the active server CASEMAPPING when available so

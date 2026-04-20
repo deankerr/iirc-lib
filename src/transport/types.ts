@@ -14,5 +14,4 @@ export type IrcMessage = {
 export type IrcCommand = {
   command: string
   params: string[]
-  trailing?: boolean
 }

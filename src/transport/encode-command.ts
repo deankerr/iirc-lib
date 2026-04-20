@@ -3,21 +3,7 @@ import type { IrcCommand } from './types'
 // Pure outbound processor: canonical command -> IRC line text.
 export function encodeCommand(command: IrcCommand): string {
   assertDefinedParams(command)
-
-  if (command.trailing !== true) {
-    return buildLine(command.command, command.params)
-  }
-
-  if (command.params.length === 0) {
-    return command.command.toUpperCase()
-  }
-
-  const head = command.params.slice(0, -1)
-  const tail = command.params.at(-1) ?? ''
-
-  let line = buildLine(command.command, head)
-  line += ` :${tail}`
-  return line
+  return buildLine(command.command, command.params)
 }
 
 function buildLine(command: string, params: ReadonlyArray<string>): string {

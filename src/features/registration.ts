@@ -198,10 +198,9 @@ function handleCapLs({
     return 'done'
   }
 
-  runtime.sendCommand({
+  runtime.send({
     command: 'CAP',
     params: ['REQ', capsToRequest.join(' ')],
-    trailing: true,
   })
   return 'awaiting_ack'
 }
@@ -342,10 +341,9 @@ export function registration(runtime: Runtime): void {
       runtime.send('PASS', config.password)
     }
     runtime.send('NICK', config.nick)
-    runtime.sendCommand({
+    runtime.send({
       command: 'USER',
       params: [config.user, '0', '*', config.realname],
-      trailing: true,
     })
   })
 

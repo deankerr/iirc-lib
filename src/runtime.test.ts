@@ -201,4 +201,26 @@ describe('Runtime', () => {
 
     expect(transport.sentLines).toEqual(['PRIVMSG #dev :hello world'])
   })
+
+  test('send also accepts canonical command objects', () => {
+    const transport = createMockTransport()
+    const runtime = createRuntime(
+      {
+        nick: 'bot',
+        sendDelayMs: 0,
+      },
+      transport.stream,
+    )
+
+    runtime.register()
+
+    transport.sentLines.length = 0
+
+    runtime.send({
+      command: 'USER',
+      params: ['bot', '0', '*', 'Bot Person'],
+    })
+
+    expect(transport.sentLines).toEqual(['USER bot 0 * :Bot Person'])
+  })
 })
