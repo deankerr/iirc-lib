@@ -71,6 +71,22 @@ describe('Runtime', () => {
     expect(runtime.connectionState.host).toBe('cloak.example')
   })
 
+  test('parseSource marks the current nick as self', () => {
+    const transport = createMockTransport()
+    const runtime = createRuntime(
+      {
+        nick: 'bot',
+        sendDelayMs: 0,
+      },
+      transport.stream,
+    )
+
+    runtime.register()
+
+    expect(runtime.parseSource('bot!u@h')?.isSelf).toBe(true)
+    expect(runtime.parseSource('other!u@h')?.isSelf).toBe(false)
+  })
+
   test('responds to server PING with PONG during registration', () => {
     const transport = createMockTransport()
     const runtime = createRuntime(
@@ -181,6 +197,25 @@ describe('Runtime', () => {
 
     expect(runtime.caseFold('[Foo]')).toBe('[foo]')
     expect(runtime.caseFold('~Foo\\Bar')).toBe('~foo\\bar')
+  })
+
+  test('runtime compares identifiers with active case mapping', () => {
+    const transport = createMockTransport()
+    const runtime = createRuntime(
+      {
+        nick: 'bot',
+        sendDelayMs: 0,
+      },
+      transport.stream,
+    )
+
+    runtime.register()
+
+    expect(runtime.sameIdentifier('[Nick]', '{nick}')).toBe(true)
+
+    transport.receive(':server 005 bot CASEMAPPING=ascii :are supported')
+
+    expect(runtime.sameIdentifier('[Nick]', '{nick}')).toBe(false)
   })
 
   test('send writes raw outbound commands without extra policy', () => {

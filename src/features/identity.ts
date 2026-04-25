@@ -11,16 +11,11 @@ export function identity(runtime: Runtime): void {
   runtime.on('message', (message) => {
     switch (message.command) {
       case 'NICK': {
-        const sourceNick = runtime.parseSourceNick(message.source)
-        const currentNick = runtime.connectionState.nick
+        const source = runtime.parseSource(message.source)
 
         // Malformed or partial nick changes are ignored so this feature only
         // advances when the server gave us a concrete before/after identity.
-        if (sourceNick === undefined || sourceNick.length === 0 || currentNick.length === 0) {
-          break
-        }
-
-        if (runtime.caseFold(sourceNick) !== runtime.caseFold(currentNick)) {
+        if (source?.nick === undefined || source.nick.length === 0 || !source.isSelf) {
           break
         }
 

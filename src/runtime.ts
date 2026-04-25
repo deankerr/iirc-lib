@@ -3,6 +3,8 @@ import type { Duplex } from 'node:stream'
 
 import { resolveConfig } from './config'
 import type { RuntimeConfig, RuntimeInputConfig } from './config'
+import { clientEvents } from './features/client-events'
+import type { ClientEvent } from './features/client-events'
 import { identity } from './features/identity'
 import { isupport } from './features/isupport'
 import { ping } from './features/ping'
@@ -13,11 +15,18 @@ import type { IrcCommand, IrcMessage } from './transport'
 
 export type RuntimeFeature = (runtime: Runtime) => void
 
-const defaultRuntimeFeatures: RuntimeFeature[] = [registration, ping, identity, isupport]
+const defaultRuntimeFeatures: RuntimeFeature[] = [
+  registration,
+  ping,
+  identity,
+  isupport,
+  clientEvents,
+]
 
 export type RuntimeEvents = {
   register: [stream: Duplex]
   message: [IrcMessage]
+  clientEvent: [event: ClientEvent]
   registered: []
   close: []
   error: [Error]
@@ -38,36 +47,7 @@ export type ParsedSource = {
   nick?: string
   user?: string
   host?: string
-}
-
-function parseSourceValue(source: string | undefined): ParsedSource | undefined {
-  if (source === undefined || source.length === 0) {
-    return undefined
-  }
-
-  const bangIndex = source.indexOf('!')
-  const atIndex = source.indexOf('@')
-
-  let nickEnd = source.length
-  if (bangIndex !== -1) {
-    nickEnd = bangIndex
-  } else if (atIndex !== -1) {
-    nickEnd = atIndex
-  }
-
-  const nick = nickEnd > 0 ? source.slice(0, nickEnd) : undefined
-
-  const userStart = bangIndex === -1 ? -1 : bangIndex + 1
-  const userEnd = atIndex === -1 ? source.length : atIndex
-  const user =
-    userStart === -1 || userEnd <= userStart ? undefined : source.slice(userStart, userEnd)
-
-  const host = atIndex === -1 ? undefined : source.slice(atIndex + 1) || undefined
-
-  if (nick === undefined && user === undefined && host === undefined) {
-    return undefined
-  }
-  return { host, nick, user }
+  isSelf: boolean
 }
 
 export class Runtime extends EventEmitter<RuntimeEvents> {
@@ -79,7 +59,6 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   readonly connectionState: ConnectionState
   readonly activeCaps = new Set<string>()
   readonly isupport = new Map<string, string | true>()
-  private readonly sourceParser = parseSourceValue
   private started = false
 
   constructor(config: RuntimeConfig, transport: Transport, features = defaultRuntimeFeatures) {
@@ -141,15 +120,70 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   // features and advanced consumers can compare identifiers consistently.
   caseFold(value: string): string {
     const caseMapping = this.isupport.get('CASEMAPPING')
-    return foldCaseMapping(value, caseMapping)
+    const asciiFolded = value.toLowerCase()
+
+    // Default to rfc1459 per spec until the server advertises CASEMAPPING.
+    const mapping = typeof caseMapping === 'string' ? caseMapping.toLowerCase() : 'rfc1459'
+
+    switch (mapping) {
+      case 'rfc1459': {
+        return asciiFolded
+          .replaceAll('[', '{')
+          .replaceAll(']', '}')
+          .replaceAll('\\', '|')
+          .replaceAll('~', '^')
+      }
+
+      case 'rfc1459-strict': {
+        return asciiFolded.replaceAll('[', '{').replaceAll(']', '}').replaceAll('\\', '|')
+      }
+
+      default: {
+        return asciiFolded
+      }
+    }
   }
 
+  // Compare IRC identifiers using the active server CASEMAPPING.
+  sameIdentifier(left: string, right: string): boolean {
+    return this.caseFold(left) === this.caseFold(right)
+  }
+
+  // Runtime exposes source parsing as a shared utility so features do not each
+  // invent their own partial hostmask parser.
   parseSource(source: string | undefined): ParsedSource | undefined {
-    return this.sourceParser(source)
-  }
+    if (source === undefined || source.length === 0) {
+      return undefined
+    }
 
-  parseSourceNick(source: string | undefined): string | undefined {
-    return this.parseSource(source)?.nick
+    const bangIndex = source.indexOf('!')
+    const atIndex = source.indexOf('@')
+
+    let nickEnd = source.length
+    if (bangIndex !== -1) {
+      nickEnd = bangIndex
+    } else if (atIndex !== -1) {
+      nickEnd = atIndex
+    }
+
+    const nick = nickEnd > 0 ? source.slice(0, nickEnd) : undefined
+
+    const userStart = bangIndex === -1 ? -1 : bangIndex + 1
+    const userEnd = atIndex === -1 ? source.length : atIndex
+    const user =
+      userStart === -1 || userEnd <= userStart ? undefined : source.slice(userStart, userEnd)
+
+    const host = atIndex === -1 ? undefined : source.slice(atIndex + 1) || undefined
+
+    if (nick === undefined && user === undefined && host === undefined) {
+      return undefined
+    }
+    return {
+      host,
+      isSelf: nick !== undefined && this.sameIdentifier(nick, this.connectionState.nick),
+      nick,
+      user,
+    }
   }
 
   private handleClose(): void {
@@ -158,40 +192,6 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
 
   private handleError(error: Error): void {
     this.emit('error', error)
-  }
-}
-
-// Fold a value using the server's advertised CASEMAPPING. Per the spec,
-// clients SHOULD assume rfc1459 until the server explicitly advertises a
-// different mapping.
-//
-// Mappings:
-//   ascii          — only A-Z fold to a-z
-//   rfc1459        — ascii + [→{ ]→} \→| ~→^
-//   rfc1459-strict — ascii + [→{ ]→} \→|   (no ~→^)
-//   rfc7613        — PRECIS-based (falls back to ascii here)
-function foldCaseMapping(value: string, caseMapping: string | true | undefined): string {
-  const asciiFolded = value.toLowerCase()
-
-  // Default to rfc1459 per spec until the server advertises CASEMAPPING.
-  const mapping = typeof caseMapping === 'string' ? caseMapping.toLowerCase() : 'rfc1459'
-
-  switch (mapping) {
-    case 'rfc1459': {
-      return asciiFolded
-        .replaceAll('[', '{')
-        .replaceAll(']', '}')
-        .replaceAll('\\', '|')
-        .replaceAll('~', '^')
-    }
-
-    case 'rfc1459-strict': {
-      return asciiFolded.replaceAll('[', '{').replaceAll(']', '}').replaceAll('\\', '|')
-    }
-
-    default: {
-      return asciiFolded
-    }
   }
 }
 
