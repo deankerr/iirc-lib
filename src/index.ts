@@ -1,6 +1,16 @@
 export * from './runtime'
 export { resolveConfig } from './config'
+export { Channel, channelTracker } from './features/channel-tracker'
 export { clientEvents } from './features/client-events'
+export { CaseFoldMap } from './case-fold-map'
+export type {
+  ChannelContext,
+  ChannelMember,
+  ChannelModeValue,
+  ChannelSource,
+  ChannelState,
+  ChannelTopic,
+} from './features/channel-tracker'
 export type {
   ClientAwayEvent,
   ClientEvent,
@@ -8,9 +18,12 @@ export type {
   ClientInviteEvent,
   ClientJoinEvent,
   ClientKickEvent,
+  ClientName,
   ClientModeChange,
   ClientModeChangeAction,
+  ClientModeChangeAppliesTo,
   ClientModeEvent,
+  ClientNickEvent,
   ClientNoticeEvent,
   ClientPartEvent,
   ClientPrivmsgEvent,

@@ -1,8 +1,11 @@
 import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 
+import { CaseFoldMap } from './case-fold-map'
 import { resolveConfig } from './config'
 import type { RuntimeConfig, RuntimeInputConfig } from './config'
+import type { Channel } from './features/channel-tracker'
+import { channelTracker } from './features/channel-tracker'
 import { clientEvents } from './features/client-events'
 import type { ClientEvent } from './features/client-events'
 import { identity } from './features/identity'
@@ -21,6 +24,7 @@ const defaultRuntimeFeatures: RuntimeFeature[] = [
   identity,
   isupport,
   clientEvents,
+  channelTracker,
 ]
 
 export type RuntimeEvents = {
@@ -59,6 +63,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   readonly connectionState: ConnectionState
   readonly activeCaps = new Set<string>()
   readonly isupport = new Map<string, string | true>()
+  readonly channels = new CaseFoldMap<Channel>((name) => this.caseFold(name))
   private started = false
 
   constructor(config: RuntimeConfig, transport: Transport, features = defaultRuntimeFeatures) {

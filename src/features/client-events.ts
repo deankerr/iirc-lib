@@ -15,11 +15,18 @@ type ClientEventArgs = {
 }
 
 export type ClientModeChangeAction = 'add' | 'remove'
+export type ClientModeChangeAppliesTo = 'channel' | 'member' | 'user'
 
 export type ClientModeChange = {
   action: ClientModeChangeAction
+  appliesTo: ClientModeChangeAppliesTo
   mode: string
   argument?: string
+}
+
+export type ClientName = {
+  modes: string[]
+  nick: string
 }
 
 export type ClientJoinEvent = ClientEventBase & {
@@ -31,6 +38,11 @@ export type ClientPartEvent = ClientEventBase & {
   text?: string
 }
 
+export type ClientNickEvent = ClientEventBase & {
+  command: 'NICK'
+  nick: string
+}
+
 export type ClientTopicEvent = ClientEventBase & {
   command: 'TOPIC'
   text: string
@@ -38,8 +50,6 @@ export type ClientTopicEvent = ClientEventBase & {
 
 export type ClientModeEvent = ClientEventBase & {
   command: 'MODE'
-  modes: string
-  args: string[]
   changes: ClientModeChange[]
 }
 
@@ -93,8 +103,7 @@ export type ClientRplTopicWhoTimeEvent = ClientEventBase & {
 
 export type ClientRplNamReplyEvent = ClientEventBase & {
   command: 'RPL_NAMREPLY'
-  symbol: string
-  names: string[]
+  members: ClientName[]
 }
 
 export type ClientRplEndOfNamesEvent = ClientEventBase & {
@@ -109,6 +118,7 @@ export type ClientUnhandledEvent = ClientEventBase & {
 export type ClientEvent =
   | ClientJoinEvent
   | ClientPartEvent
+  | ClientNickEvent
   | ClientTopicEvent
   | ClientModeEvent
   | ClientInviteEvent
@@ -139,6 +149,10 @@ function createClientEvent(runtime: Runtime, message: IrcMessage): ClientEvent {
 
     case 'PART': {
       return createPartEvent(runtime, message)
+    }
+
+    case 'NICK': {
+      return createNickEvent(runtime, message)
     }
 
     case 'TOPIC': {
@@ -214,6 +228,16 @@ function createPartEvent(runtime: Runtime, message: IrcMessage): ClientPartEvent
   }
 }
 
+function createNickEvent(runtime: Runtime, message: IrcMessage): ClientNickEvent {
+  const [nick = ''] = message.params
+
+  return {
+    ...baseEvent({ message, runtime, target: nick }),
+    command: 'NICK',
+    nick,
+  }
+}
+
 function createTopicEvent(runtime: Runtime, message: IrcMessage): ClientTopicEvent {
   const [channel = '', text = ''] = message.params
 
@@ -229,10 +253,8 @@ function createModeEvent(runtime: Runtime, message: IrcMessage): ClientModeEvent
 
   return {
     ...baseEvent({ message, runtime, target }),
-    args,
     changes: parseModeChanges(runtime, target, modes, args),
     command: 'MODE',
-    modes,
   }
 }
 
@@ -327,13 +349,16 @@ function createRplTopicWhoTimeEvent(
 }
 
 function createRplNamReplyEvent(runtime: Runtime, message: IrcMessage): ClientRplNamReplyEvent {
-  const [, symbol = '', channel = '', namesText = ''] = message.params
+  const channel = message.params[2] ?? ''
+  const rawNames = message.params[3] ?? ''
 
   return {
     ...baseEvent({ message, runtime, target: channel }),
     command: 'RPL_NAMREPLY',
-    names: namesText.split(' ').filter((name) => name.length > 0),
-    symbol,
+    members: rawNames
+      .split(' ')
+      .filter((name) => name.length > 0)
+      .map((name) => parseName(runtime, name)),
   }
 }
 
@@ -400,16 +425,30 @@ function parseModeChanges(
       continue
     }
 
+    const appliesTo = modeAppliesTo(runtime, target, mode)
+
     if (modeNeedsArgument(runtime, target, action, mode)) {
-      changes.push({ action, argument: args[argIndex] ?? '', mode })
+      changes.push({ action, appliesTo, argument: args[argIndex] ?? '', mode })
       argIndex += 1
       continue
     }
 
-    changes.push({ action, mode })
+    changes.push({ action, appliesTo, mode })
   }
 
   return changes
+}
+
+function modeAppliesTo(runtime: Runtime, target: string, mode: string): ClientModeChangeAppliesTo {
+  if (!isChannelTarget(runtime, target)) {
+    return 'user'
+  }
+
+  if (prefixModes(runtime).includes(mode)) {
+    return 'member'
+  }
+
+  return 'channel'
 }
 
 function modeNeedsArgument(
@@ -460,4 +499,37 @@ function prefixModes(runtime: Runtime): string {
   const value = runtime.isupport.get('PREFIX')
   const prefix = typeof value === 'string' ? value : DEFAULT_PREFIX
   return /^\(([^)]*)\)/.exec(prefix)?.[1] ?? ''
+}
+
+function parseName(runtime: Runtime, name: string): ClientName {
+  const prefixToMode = prefixModeMap(runtime)
+  const modes: string[] = []
+  let nickStart = 0
+
+  while (nickStart < name.length) {
+    const mode = prefixToMode.get(name[nickStart] ?? '')
+    if (mode === undefined) {
+      break
+    }
+
+    modes.push(mode)
+    nickStart += 1
+  }
+
+  return { modes, nick: name.slice(nickStart) }
+}
+
+function prefixModeMap(runtime: Runtime): Map<string, string> {
+  const value = runtime.isupport.get('PREFIX')
+  const prefix = typeof value === 'string' ? value : DEFAULT_PREFIX
+  const match = /^\(([^)]*)\)(.*)$/.exec(prefix)
+  const modes = match?.[1] ?? ''
+  const prefixes = match?.[2] ?? ''
+  const prefixToMode = new Map<string, string>()
+
+  for (let index = 0; index < prefixes.length; index += 1) {
+    prefixToMode.set(prefixes[index] ?? '', modes[index] ?? '')
+  }
+
+  return prefixToMode
 }
