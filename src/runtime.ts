@@ -9,7 +9,7 @@ import { channelTracker } from './features/channel-tracker'
 import { clientEvents } from './features/client-events'
 import type { ClientEvent } from './features/client-events'
 import { identity } from './features/identity'
-import { isupport } from './features/isupport'
+import { IsupportMap, isupport } from './features/isupport'
 import { ping } from './features/ping'
 import { registration } from './features/registration'
 import { Numeric } from './numerics'
@@ -18,6 +18,9 @@ import type { IrcCommand, IrcMessage } from './transport'
 
 export type RuntimeFeature = (runtime: Runtime) => void
 
+// Features are applied in order. clientEvents must precede any feature that
+// subscribes to 'clientEvent', because EventEmitter delivers synchronously and
+// a subscriber that has not yet been registered will miss events.
 const defaultRuntimeFeatures: RuntimeFeature[] = [
   registration,
   ping,
@@ -62,7 +65,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
 
   readonly connectionState: ConnectionState
   readonly activeCaps = new Set<string>()
-  readonly isupport = new Map<string, string | true>()
+  readonly isupport = new IsupportMap()
   readonly channels = new CaseFoldMap<Channel>((name) => this.caseFold(name))
   private started = false
 
@@ -124,11 +127,8 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   // Fold a value using the active server CASEMAPPING when available so
   // features and advanced consumers can compare identifiers consistently.
   caseFold(value: string): string {
-    const caseMapping = this.isupport.get('CASEMAPPING')
+    const mapping = this.isupport.CASEMAPPING.toLowerCase()
     const asciiFolded = value.toLowerCase()
-
-    // Default to rfc1459 per spec until the server advertises CASEMAPPING.
-    const mapping = typeof caseMapping === 'string' ? caseMapping.toLowerCase() : 'rfc1459'
 
     switch (mapping) {
       case 'rfc1459': {
@@ -156,6 +156,10 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
 
   // Runtime exposes source parsing as a shared utility so features do not each
   // invent their own partial hostmask parser.
+  //
+  // IRC source format: nick[!user][@host]
+  // The nick portion is everything up to the first '!' or '@'. User is between
+  // '!' and '@'. Host is everything after '@'. Any segment may be absent.
   parseSource(source: string | undefined): ParsedSource | undefined {
     if (source === undefined || source.length === 0) {
       return undefined

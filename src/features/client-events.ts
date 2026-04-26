@@ -1,3 +1,4 @@
+import { parseCtcp } from '../ctcp'
 import type { Runtime } from '../runtime'
 import type { IrcMessage } from '../transport'
 
@@ -111,6 +112,10 @@ export type ClientRplEndOfNamesEvent = ClientEventBase & {
   text?: string
 }
 
+export type ClientRplNoTopicEvent = ClientEventBase & {
+  command: 'RPL_NOTOPIC'
+}
+
 export type ClientUnhandledEvent = ClientEventBase & {
   command: 'UNHANDLED'
 }
@@ -132,6 +137,7 @@ export type ClientEvent =
   | ClientRplTopicWhoTimeEvent
   | ClientRplNamReplyEvent
   | ClientRplEndOfNamesEvent
+  | ClientRplNoTopicEvent
   | ClientUnhandledEvent
 
 export function clientEvents(runtime: Runtime): void {
@@ -201,6 +207,10 @@ function createClientEvent(runtime: Runtime, message: IrcMessage): ClientEvent {
 
     case runtime.numerics.RPL_ENDOFNAMES: {
       return createRplEndOfNamesEvent(runtime, message)
+    }
+
+    case runtime.numerics.RPL_NOTOPIC: {
+      return createRplNoTopicEvent(runtime, message)
     }
 
     default: {
@@ -285,12 +295,22 @@ function createPrivmsgEvent(
   message: IrcMessage,
 ): ClientPrivmsgEvent | ClientActionEvent {
   const [target = '', text = ''] = message.params
-  const actionText = parseActionText(text)
+  const ctcp = parseCtcp(text)
+
+  // ACTION is the only CTCP command promoted to its own event type.
+  // All other CTCP commands arrive as ordinary PRIVMSG.
+  if (ctcp?.command === 'ACTION') {
+    return {
+      ...baseEvent({ message, runtime, target }),
+      command: 'ACTION',
+      text: ctcp.arguments,
+    }
+  }
 
   return {
     ...baseEvent({ message, runtime, target }),
-    command: actionText === undefined ? 'PRIVMSG' : 'ACTION',
-    text: actionText ?? text,
+    command: 'PRIVMSG',
+    text,
   }
 }
 
@@ -372,6 +392,15 @@ function createRplEndOfNamesEvent(runtime: Runtime, message: IrcMessage): Client
   }
 }
 
+function createRplNoTopicEvent(runtime: Runtime, message: IrcMessage): ClientRplNoTopicEvent {
+  const [, channel = ''] = message.params
+
+  return {
+    ...baseEvent({ message, runtime, target: channel }),
+    command: 'RPL_NOTOPIC',
+  }
+}
+
 function createUnhandledEvent(runtime: Runtime, message: IrcMessage): ClientUnhandledEvent {
   return {
     ...baseEvent({ message, runtime }),
@@ -391,18 +420,6 @@ function baseEvent({ message, runtime, target = '' }: ClientEventArgs): ClientEv
 function isFromSelf(runtime: Runtime, message: IrcMessage): boolean {
   return runtime.parseSource(message.source)?.isSelf ?? false
 }
-
-function parseActionText(text: string): string | undefined {
-  if (!text.startsWith('\u0001ACTION ') || !text.endsWith('\u0001')) {
-    return undefined
-  }
-
-  return text.slice('\u0001ACTION '.length, -1)
-}
-
-const DEFAULT_CHANNEL_TYPES = '#&'
-const DEFAULT_CHANMODES = ['b', 'k', 'l', 'imnpst'] as const
-const DEFAULT_PREFIX = '(ov)@+'
 
 function parseModeChanges(
   runtime: Runtime,
@@ -474,31 +491,15 @@ function modeNeedsArgument(
 }
 
 function isChannelTarget(runtime: Runtime, target: string): boolean {
-  return channelTypes(runtime).includes(target[0] ?? '')
-}
-
-function channelTypes(runtime: Runtime): string {
-  const value = runtime.isupport.get('CHANTYPES')
-  if (typeof value === 'string') {
-    return value
-  }
-
-  return DEFAULT_CHANNEL_TYPES
+  return runtime.isupport.CHANTYPES.includes(target[0] ?? '')
 }
 
 function chanModeGroups(runtime: Runtime): string[] {
-  const value = runtime.isupport.get('CHANMODES')
-  if (typeof value === 'string') {
-    return value.split(',')
-  }
-
-  return [...DEFAULT_CHANMODES]
+  return runtime.isupport.CHANMODES.split(',')
 }
 
 function prefixModes(runtime: Runtime): string {
-  const value = runtime.isupport.get('PREFIX')
-  const prefix = typeof value === 'string' ? value : DEFAULT_PREFIX
-  return /^\(([^)]*)\)/.exec(prefix)?.[1] ?? ''
+  return /^\(([^)]*)\)/.exec(runtime.isupport.PREFIX)?.[1] ?? ''
 }
 
 function parseName(runtime: Runtime, name: string): ClientName {
@@ -520,8 +521,7 @@ function parseName(runtime: Runtime, name: string): ClientName {
 }
 
 function prefixModeMap(runtime: Runtime): Map<string, string> {
-  const value = runtime.isupport.get('PREFIX')
-  const prefix = typeof value === 'string' ? value : DEFAULT_PREFIX
+  const prefix = runtime.isupport.PREFIX
   const match = /^\(([^)]*)\)(.*)$/.exec(prefix)
   const modes = match?.[1] ?? ''
   const prefixes = match?.[2] ?? ''

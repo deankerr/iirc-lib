@@ -8,7 +8,8 @@ import type { TLSSocket } from 'node:tls'
 
 import { Command, InvalidArgumentError } from 'commander'
 
-import { resolveConfig, Runtime } from '../src'
+import { Runtime } from '../src'
+import { resolveConfig } from '../src/config'
 import { Transport } from '../src/transport'
 
 const SEND_DELAY_MS = 100

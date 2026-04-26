@@ -15,8 +15,11 @@ export type ChannelMember = {
 
 export type ChannelModeValue = string | true
 
-export type ChannelSource = ParsedSource & {
+export type ChannelSource = {
   nick: string
+  user?: string
+  host?: string
+  isSelf: boolean
 }
 
 export type ChannelContext = {
@@ -27,7 +30,7 @@ export type ChannelContext = {
 type ChannelSourceEvent = Extract<ClientEvent, { command: 'JOIN' | 'PART' | 'NICK' | 'QUIT' }>
 type ChannelEventWithoutSource = Extract<
   ClientEvent,
-  { command: 'KICK' | 'TOPIC' | 'MODE' | 'RPL_TOPIC' | 'RPL_TOPICWHOTIME' }
+  { command: 'KICK' | 'TOPIC' | 'MODE' | 'RPL_TOPIC' | 'RPL_TOPICWHOTIME' | 'RPL_NOTOPIC' }
 >
 export type ChannelState = Channel
 
@@ -115,6 +118,11 @@ export class Channel {
         break
       }
 
+      case 'RPL_NOTOPIC': {
+        this.topic = undefined
+        break
+      }
+
       case 'MODE': {
         for (const change of event.changes) {
           if (change.appliesTo === 'user') {
@@ -188,78 +196,77 @@ export class Channel {
   }
 }
 
+function handleTargetedEvent(
+  event: ClientEvent,
+  context: ChannelContext,
+  parsed: ParsedSource | undefined,
+  ensureChannel: (name: string) => Channel,
+  pendingNames: CaseFoldMap<ClientName[]>,
+): void {
+  // oxlint-disable-next-line typescript-eslint/switch-exhaustiveness-check
+  switch (event.command) {
+    case 'JOIN':
+    case 'PART': {
+      if (parsed?.nick === undefined) {
+        return
+      }
+
+      const source: ChannelSource = { ...parsed, nick: parsed.nick }
+      const channel = ensureChannel(event.target)
+      channel.applySource(event, source)
+      return
+    }
+
+    case 'KICK':
+    case 'TOPIC':
+    case 'RPL_TOPIC':
+    case 'RPL_TOPICWHOTIME':
+    case 'RPL_NOTOPIC': {
+      const channel = ensureChannel(event.target)
+      channel.apply(event, context)
+      return
+    }
+
+    case 'MODE': {
+      if (event.changes.every((change) => change.appliesTo === 'user')) {
+        return
+      }
+
+      const channel = ensureChannel(event.target)
+      channel.apply(event, context)
+      return
+    }
+
+    case 'RPL_NAMREPLY': {
+      ensureChannel(event.target)
+      pendingNames.ensure(event.target, () => []).push(...event.members)
+      return
+    }
+
+    case 'RPL_ENDOFNAMES': {
+      const channel = ensureChannel(event.target)
+      channel.setMembers(pendingNames.get(event.target) ?? [])
+      pendingNames.delete(event.target)
+      return
+    }
+
+    default: {
+      break
+    }
+  }
+}
+
 export function channelTracker(runtime: Runtime): void {
   const pendingNames = new CaseFoldMap<ClientName[]>((name) => runtime.caseFold(name))
+  const ensureChannel = (name: string) =>
+    runtime.channels.ensure(name, () => new Channel(name, (key) => runtime.caseFold(key)))
 
   runtime.on('clientEvent', (event) => {
-    const source = sourceWithNick(runtime.parseSource(event.source))
-    const context = channelContext(runtime)
+    const parsed = runtime.parseSource(event.source)
 
     if (event.target !== '') {
-      // oxlint-disable-next-line typescript-eslint/switch-exhaustiveness-check
-      switch (event.command) {
-        case 'JOIN':
-        case 'PART': {
-          const channel = runtime.channels.ensure(
-            event.target,
-            () => new Channel(event.target, (key) => runtime.caseFold(key)),
-          )
-          if (source === undefined) {
-            return
-          }
-
-          channel.applySource(event, source)
-          return
-        }
-
-        case 'KICK':
-        case 'TOPIC':
-        case 'RPL_TOPIC':
-        case 'RPL_TOPICWHOTIME': {
-          const channel = runtime.channels.ensure(
-            event.target,
-            () => new Channel(event.target, (key) => runtime.caseFold(key)),
-          )
-          channel.apply(event, context)
-          return
-        }
-
-        case 'MODE': {
-          if (event.changes.every((change) => change.appliesTo === 'user')) {
-            return
-          }
-
-          const channel = runtime.channels.ensure(
-            event.target,
-            () => new Channel(event.target, (key) => runtime.caseFold(key)),
-          )
-          channel.apply(event, context)
-          return
-        }
-
-        case 'RPL_NAMREPLY': {
-          runtime.channels.ensure(
-            event.target,
-            () => new Channel(event.target, (key) => runtime.caseFold(key)),
-          )
-          pendingNames.ensure(event.target, () => []).push(...event.members)
-          return
-        }
-
-        case 'RPL_ENDOFNAMES': {
-          const channel = runtime.channels.ensure(
-            event.target,
-            () => new Channel(event.target, (key) => runtime.caseFold(key)),
-          )
-          channel.setMembers(pendingNames.get(event.target) ?? [])
-          pendingNames.delete(event.target)
-          return
-        }
-
-        default: {
-          break
-        }
-      }
+      handleTargetedEvent(event, channelContext(runtime), parsed, ensureChannel, pendingNames)
+      return
     }
 
     // Broadcast events do not name a channel, so each tracked channel decides
@@ -268,10 +275,11 @@ export function channelTracker(runtime: Runtime): void {
     switch (event.command) {
       case 'NICK':
       case 'QUIT': {
-        if (source === undefined) {
+        if (parsed?.nick === undefined) {
           return
         }
 
+        const source: ChannelSource = { ...parsed, nick: parsed.nick }
         for (const channel of runtime.channels.values()) {
           channel.applySource(event, source)
         }
@@ -289,16 +297,5 @@ function channelContext(runtime: Runtime): ChannelContext {
   return {
     currentNick: runtime.connectionState.nick,
     sameIdentifier: (left, right) => runtime.sameIdentifier(left, right),
-  }
-}
-
-function sourceWithNick(source: ParsedSource | undefined): ChannelSource | undefined {
-  if (source?.nick === undefined) {
-    return undefined
-  }
-
-  return {
-    ...source,
-    nick: source.nick,
   }
 }

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { createMockTransport } from '../mock-transport'
 import { createRuntime } from '../runtime'
+import { IsupportMap } from './isupport'
 
 function createClient() {
   const transport = createMockTransport()
@@ -11,6 +12,58 @@ function createClient() {
   transport.sentLines.length = 0
   return { runtime, transport }
 }
+
+describe('IsupportMap', () => {
+  test('named getters return spec defaults before advertisement', () => {
+    const map = new IsupportMap()
+
+    expect(map.CASEMAPPING).toBe('rfc1459')
+    expect(map.CHANMODES).toBe('b,k,l,imnpst')
+    expect(map.CHANTYPES).toBe('#&')
+    expect(map.MODES).toBe('3')
+    expect(map.PREFIX).toBe('(ov)@+')
+  })
+
+  test('named getters return advertised values', () => {
+    const map = new IsupportMap()
+    map.set('CASEMAPPING', 'ascii')
+    map.set('CHANMODES', 'beI,kfL,lj,psmnt')
+    map.set('CHANTYPES', '#')
+    map.set('MODES', '4')
+    map.set('PREFIX', '(ohv)@%+')
+
+    expect(map.CASEMAPPING).toBe('ascii')
+    expect(map.CHANMODES).toBe('beI,kfL,lj,psmnt')
+    expect(map.CHANTYPES).toBe('#')
+    expect(map.MODES).toBe('4')
+    expect(map.PREFIX).toBe('(ohv)@%+')
+  })
+
+  test('named getters revert to defaults after deletion', () => {
+    const map = new IsupportMap()
+    map.set('CASEMAPPING', 'ascii')
+    expect(map.CASEMAPPING).toBe('ascii')
+
+    map.delete('CASEMAPPING')
+    expect(map.CASEMAPPING).toBe('rfc1459')
+  })
+
+  test('named getters fall back to default when value is true (boolean flag)', () => {
+    const map = new IsupportMap()
+    map.set('CHANTYPES', true)
+
+    // A boolean flag should not happen for CHANTYPES, but the fallback
+    // is defensive — return the spec default rather than `true`.
+    expect(map.CHANTYPES).toBe('#&')
+  })
+
+  test('arbitrary get returns undefined for unadvertised keys', () => {
+    const map = new IsupportMap()
+
+    expect(map.get('NETWORK')).toBeUndefined()
+    expect(map.get('SAFELIST')).toBeUndefined()
+  })
+})
 
 describe('isupport', () => {
   test('stores key=value tokens', () => {
