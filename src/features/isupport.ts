@@ -11,46 +11,167 @@ const ISUPPORT_DEFAULTS = {
   PREFIX: '(ov)@+',
 } as const
 
+// Parse a PREFIX value like "(ov)@+" into a mode-letter string and a
+// prefix-character → mode-letter map.
+function parsePrefix(value: string): { modes: string; prefixToMode: Map<string, string> } {
+  const match = /^\(([^)]*)\)(.*)$/.exec(value)
+  const modes = match?.[1] ?? ''
+  const prefixes = match?.[2] ?? ''
+  const prefixToMode = new Map<string, string>()
+
+  for (let index = 0; index < prefixes.length; index += 1) {
+    prefixToMode.set(prefixes[index] ?? '', modes[index] ?? '')
+  }
+
+  return { modes, prefixToMode }
+}
+
+// Parse a CHANMODES value like "b,k,l,imnpst" into a four-element tuple of
+// mode groups: [typeA, typeB, typeC, typeD].
+function parseChanModes(value: string): [string, string, string, string] {
+  const groups = value.split(',')
+  return [groups[0] ?? '', groups[1] ?? '', groups[2] ?? '', groups[3] ?? '']
+}
+
+export type ModeChangeAppliesTo = 'channel' | 'member' | 'user'
+export type ModeChangeAction = 'add' | 'remove'
+
 export class IsupportMap {
   private readonly values = new Map<string, string | true>()
 
-  // Core parameters with spec-defined defaults. Always return a string.
+  // Cached core strings — recomputed whenever set/delete touches them.
+  private casemapping: string = ISUPPORT_DEFAULTS.CASEMAPPING
+  private chanmodes: string = ISUPPORT_DEFAULTS.CHANMODES
+  private chantypes: string = ISUPPORT_DEFAULTS.CHANTYPES
+  private modes: string = ISUPPORT_DEFAULTS.MODES
+  private prefix: string = ISUPPORT_DEFAULTS.PREFIX
+
+  // Cached derived values — recomputed alongside the strings they depend on.
+  private prefixToModeCached: ReadonlyMap<string, string>
+  private chanModeGroupsCached: [string, string, string, string]
+
+  constructor() {
+    const parsed = parsePrefix(this.prefix)
+    this.prefixToModeCached = parsed.prefixToMode
+    this.chanModeGroupsCached = parseChanModes(this.chanmodes)
+  }
+
+  // --- Core parameter access ---
+
   get CASEMAPPING(): string {
-    return this.stringOrDefault('CASEMAPPING')
+    return this.casemapping
   }
 
   get CHANMODES(): string {
-    return this.stringOrDefault('CHANMODES')
+    return this.chanmodes
   }
 
   get CHANTYPES(): string {
-    return this.stringOrDefault('CHANTYPES')
+    return this.chantypes
   }
 
   get MODES(): string {
-    return this.stringOrDefault('MODES')
+    return this.modes
   }
 
   get PREFIX(): string {
-    return this.stringOrDefault('PREFIX')
+    return this.prefix
   }
 
-  // Arbitrary parameter lookup. Returns undefined for unadvertised keys,
-  // string for valued parameters, true for boolean flags (e.g. SAFELIST).
+  // --- Derived access ---
+
+  // Prefix character → mode letter (e.g. '@' → 'o', '+' → 'v').
+  get prefixToMode(): ReadonlyMap<string, string> {
+    return this.prefixToModeCached
+  }
+
+  // Whether a target string is a channel name per the advertised CHANTYPES.
+  isChannel(target: string): boolean {
+    return this.chantypes.includes(target[0] ?? '')
+  }
+
+  // What kind of entity a mode character applies to.
+  modeAppliesTo(target: string, mode: string): ModeChangeAppliesTo {
+    if (!this.isChannel(target)) {
+      return 'user'
+    }
+
+    if (this.prefixToModeCached.has(mode)) {
+      return 'member'
+    }
+
+    return 'channel'
+  }
+
+  // Whether a mode character requires an argument in the given direction.
+  // Prefix modes always require an argument. Among chan modes, types A and B
+  // always require one; type C requires one only when adding (not removing).
+  modeNeedsArgument(mode: string, action: ModeChangeAction): boolean {
+    if (this.prefixToModeCached.has(mode)) {
+      return true
+    }
+
+    const [typeA, typeB, typeC] = this.chanModeGroupsCached
+    if (typeA.includes(mode) || typeB.includes(mode)) {
+      return true
+    }
+
+    return action === 'add' && typeC.includes(mode)
+  }
+
+  // --- Arbitrary parameter lookup ---
+
   get(key: string): string | true | undefined {
     return this.values.get(key)
   }
 
   set(key: string, value: string | true): void {
     this.values.set(key, value)
+    this.recompute(key)
   }
 
   delete(key: string): boolean {
-    return this.values.delete(key)
+    const deleted = this.values.delete(key)
+    this.recompute(key)
+    return deleted
   }
 
   clear(): void {
     this.values.clear()
+    this.recomputeAll()
+  }
+
+  // --- Private ---
+
+  private recompute(key: string): void {
+    const upperKey = key.toUpperCase()
+
+    if (upperKey === 'CASEMAPPING') {
+      this.casemapping = this.stringOrDefault('CASEMAPPING')
+    } else if (upperKey === 'CHANMODES') {
+      this.chanmodes = this.stringOrDefault('CHANMODES')
+      this.chanModeGroupsCached = parseChanModes(this.chanmodes)
+    } else if (upperKey === 'CHANTYPES') {
+      this.chantypes = this.stringOrDefault('CHANTYPES')
+    } else if (upperKey === 'MODES') {
+      this.modes = this.stringOrDefault('MODES')
+    } else if (upperKey === 'PREFIX') {
+      this.prefix = this.stringOrDefault('PREFIX')
+      const parsed = parsePrefix(this.prefix)
+      this.prefixToModeCached = parsed.prefixToMode
+    }
+  }
+
+  private recomputeAll(): void {
+    this.casemapping = this.stringOrDefault('CASEMAPPING')
+    this.chanmodes = this.stringOrDefault('CHANMODES')
+    this.chantypes = this.stringOrDefault('CHANTYPES')
+    this.modes = this.stringOrDefault('MODES')
+    this.prefix = this.stringOrDefault('PREFIX')
+
+    const parsed = parsePrefix(this.prefix)
+    this.prefixToModeCached = parsed.prefixToMode
+    this.chanModeGroupsCached = parseChanModes(this.chanmodes)
   }
 
   private stringOrDefault(key: keyof typeof ISUPPORT_DEFAULTS): string {
@@ -115,15 +236,15 @@ export function isupport(runtime: Runtime): void {
         // Token advertised without a value. Some parameters define an "empty
         // value" that is the semantic default (e.g. EXCEPTS → "e", INVEX → "I").
         // Others are true boolean flags (e.g. SAFELIST) and stored as `true`.
-        const key = token.toUpperCase()
-        const emptyDefault = EMPTY_VALUE_DEFAULTS[key]
-        runtime.isupport.set(key, emptyDefault ?? true)
+        const tokenKey = token.toUpperCase()
+        const emptyDefault = EMPTY_VALUE_DEFAULTS[tokenKey]
+        runtime.isupport.set(tokenKey, emptyDefault ?? true)
         continue
       }
 
-      const key = token.slice(0, equalsIndex).toUpperCase()
+      const tokenKey = token.slice(0, equalsIndex).toUpperCase()
       const rawValue = token.slice(equalsIndex + 1)
-      runtime.isupport.set(key, unescapeIsupportValue(rawValue))
+      runtime.isupport.set(tokenKey, unescapeIsupportValue(rawValue))
     }
   })
 }

@@ -182,43 +182,6 @@ See also:
 - IRCv3 multi-prefix Extension
 - IRCv3 userhost-in-names Extension
 
-### LIST message
-
-```
-Command: LIST
-  Parameters: [<channel>{,<channel>}] [<elistcond>{,<elistcond>}]
-```
-
-The `LIST` command gets a list of channels along with information about each. Both parameters are optional with different syntaxes.
-
-- The first parameter is a list of channel names delimited by comma `(",", 0x2C)`. If given, only those channels' info is returned. If not given, info about all visible channels (those not hidden by the secret channel mode rules) is returned.
-- The second parameter is a list of ELIST conditions delimited by comma `(",", 0x2C)`. Clients MUST NOT submit an ELIST condition unless the server has explicitly defined support via the ELIST token. If supplied, the server filters the returned list with the given conditions as specified in the ELIST documentation.
-- In response, the server MAY send one RPL_LISTSTART (321) numeric, MUST send zero or more RPL_LIST (322) numerics, and MUST send one RPL_LISTEND (323) numeric.
-
-Numeric Replies:
-
-- RPL_LISTSTART (321)
-- RPL_LIST (322)
-- RPL_LISTEND (323)
-
-Command Examples:
-
-```
-LIST                            ; Command to list all channels
-
-LIST #twilight_zone,#42         ; Command to list the channels
-                                "#twilight_zone" and "#42".
-
-LIST >3                         ; Command to list all channels with
-                                more than three users.
-
-LIST C>60                       ; Command to list all channels with
-                                created at least 60 minutes ago
-
-LIST T<60                       ; Command to list all channels with
-                                a topic changed within the last 60 minutes
-```
-
 ### INVITE message
 
 ```

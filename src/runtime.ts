@@ -51,11 +51,13 @@ export type ConnectionState = {
 }
 
 export type ParsedSource = {
-  nick?: string
+  name: string
   user?: string
   host?: string
   isSelf: boolean
 }
+
+const UNKNOWN_SOURCE: ParsedSource = { isSelf: false, name: '(unknown)' }
 
 export class Runtime extends EventEmitter<RuntimeEvents> {
   readonly numerics = Numeric
@@ -154,28 +156,34 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     return this.caseFold(left) === this.caseFold(right)
   }
 
+  // Whether a target string starts with a known channel prefix per ISUPPORT.
+  isChannel(target: string): boolean {
+    return this.isupport.isChannel(target)
+  }
+
   // Runtime exposes source parsing as a shared utility so features do not each
   // invent their own partial hostmask parser.
   //
-  // IRC source format: nick[!user][@host]
-  // The nick portion is everything up to the first '!' or '@'. User is between
-  // '!' and '@'. Host is everything after '@'. Any segment may be absent.
-  parseSource(source: string | undefined): ParsedSource | undefined {
+  // IRC source format: name[!user][@host]
+  // Per spec the server may omit source for any message. When absent or empty
+  // we return a fallback. The server may also send a bare hostname or any
+  // arbitrary string — name reflects that it might not be a nick.
+  parseSource(source: string | undefined): ParsedSource {
     if (source === undefined || source.length === 0) {
-      return undefined
+      return UNKNOWN_SOURCE
     }
 
     const bangIndex = source.indexOf('!')
     const atIndex = source.indexOf('@')
 
-    let nickEnd = source.length
+    let nameEnd = source.length
     if (bangIndex !== -1) {
-      nickEnd = bangIndex
+      nameEnd = bangIndex
     } else if (atIndex !== -1) {
-      nickEnd = atIndex
+      nameEnd = atIndex
     }
 
-    const nick = nickEnd > 0 ? source.slice(0, nickEnd) : undefined
+    const name = nameEnd > 0 ? source.slice(0, nameEnd) : '(unknown)'
 
     const userStart = bangIndex === -1 ? -1 : bangIndex + 1
     const userEnd = atIndex === -1 ? source.length : atIndex
@@ -184,13 +192,10 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
 
     const host = atIndex === -1 ? undefined : source.slice(atIndex + 1) || undefined
 
-    if (nick === undefined && user === undefined && host === undefined) {
-      return undefined
-    }
     return {
       host,
-      isSelf: nick !== undefined && this.sameIdentifier(nick, this.connectionState.nick),
-      nick,
+      isSelf: this.sameIdentifier(name, this.connectionState.nick),
+      name,
       user,
     }
   }

@@ -13,9 +13,7 @@ export function identity(runtime: Runtime): void {
       case 'NICK': {
         const source = runtime.parseSource(message.source)
 
-        // Malformed or partial nick changes are ignored so this feature only
-        // advances when the server gave us a concrete before/after identity.
-        if (source?.nick === undefined || source.nick.length === 0 || !source.isSelf) {
+        if (!source.isSelf) {
           break
         }
 

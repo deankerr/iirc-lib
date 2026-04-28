@@ -1,6 +1,6 @@
 import { CaseFoldMap } from '../case-fold-map'
-import type { ParsedSource, Runtime } from '../runtime'
-import type { ClientEvent, ClientName } from './client-events'
+import type { Runtime } from '../runtime'
+import type { ClientEvent, ClientModeChange, ClientName } from './client-events'
 
 export type ChannelTopic = {
   text: string
@@ -16,7 +16,7 @@ export type ChannelMember = {
 export type ChannelModeValue = string | true
 
 export type ChannelSource = {
-  nick: string
+  name: string
   user?: string
   host?: string
   isSelf: boolean
@@ -30,7 +30,17 @@ export type ChannelContext = {
 type ChannelSourceEvent = Extract<ClientEvent, { command: 'JOIN' | 'PART' | 'NICK' | 'QUIT' }>
 type ChannelEventWithoutSource = Extract<
   ClientEvent,
-  { command: 'KICK' | 'TOPIC' | 'MODE' | 'RPL_TOPIC' | 'RPL_TOPICWHOTIME' | 'RPL_NOTOPIC' }
+  {
+    command:
+      | 'KICK'
+      | 'TOPIC'
+      | 'MODE'
+      | 'RPL_TOPIC'
+      | 'RPL_TOPICWHOTIME'
+      | 'RPL_NOTOPIC'
+      | 'RPL_CHANNELMODEIS'
+      | 'RPL_CREATIONTIME'
+  }
 >
 export type ChannelState = Channel
 
@@ -41,6 +51,7 @@ export class Channel {
 
   joined = false
   topic?: ChannelTopic
+  createdAt?: string
 
   constructor(name: string, caseFold: (key: string) => string) {
     this.members = new CaseFoldMap(caseFold)
@@ -52,40 +63,71 @@ export class Channel {
   applySource(event: ChannelSourceEvent, source: ChannelSource): void {
     switch (event.command) {
       case 'JOIN': {
-        if (event.isFromSelf) {
+        if (source.isSelf) {
           this.joined = true
         }
 
-        this.addMember(source.nick)
+        this.addMember(source.name)
         break
       }
 
       case 'PART': {
-        if (event.isFromSelf) {
+        if (source.isSelf) {
           this.joined = false
         }
 
-        this.removeMember(source.nick)
+        this.removeMember(source.name)
         break
       }
 
       case 'QUIT': {
-        if (event.isFromSelf) {
+        if (source.isSelf) {
           this.joined = false
         }
 
-        this.removeMember(source.nick)
+        this.removeMember(source.name)
         break
       }
 
       case 'NICK': {
-        this.renameMember(source.nick, event.nick)
+        this.renameMember(source.name, event.nick)
         break
       }
 
       default: {
         break
       }
+    }
+  }
+
+  // Apply a mode change list to this channel, ignoring user-mode changes.
+  applyChanges(changes: ClientModeChange[]): void {
+    for (const change of changes) {
+      if (change.appliesTo === 'user') {
+        continue
+      }
+
+      if (change.appliesTo === 'channel') {
+        if (change.action === 'add') {
+          this.modes.set(change.mode, change.argument ?? true)
+          continue
+        }
+
+        this.modes.delete(change.mode)
+        continue
+      }
+
+      if (change.argument === undefined) {
+        continue
+      }
+
+      const member = this.addMember(change.argument)
+      if (change.action === 'add') {
+        member.modes.add(change.mode)
+        continue
+      }
+
+      member.modes.delete(change.mode)
     }
   }
 
@@ -123,34 +165,18 @@ export class Channel {
         break
       }
 
+      case 'RPL_CHANNELMODEIS': {
+        this.applyChanges(event.changes)
+        break
+      }
+
+      case 'RPL_CREATIONTIME': {
+        this.createdAt = event.setAt
+        break
+      }
+
       case 'MODE': {
-        for (const change of event.changes) {
-          if (change.appliesTo === 'user') {
-            continue
-          }
-
-          if (change.appliesTo === 'channel') {
-            if (change.action === 'add') {
-              this.modes.set(change.mode, change.argument ?? true)
-              continue
-            }
-
-            this.modes.delete(change.mode)
-            continue
-          }
-
-          if (change.argument === undefined) {
-            continue
-          }
-
-          const member = this.addMember(change.argument)
-          if (change.action === 'add') {
-            member.modes.add(change.mode)
-            continue
-          }
-
-          member.modes.delete(change.mode)
-        }
+        this.applyChanges(event.changes)
         break
       }
 
@@ -199,7 +225,6 @@ export class Channel {
 function handleTargetedEvent(
   event: ClientEvent,
   context: ChannelContext,
-  parsed: ParsedSource | undefined,
   ensureChannel: (name: string) => Channel,
   pendingNames: CaseFoldMap<ClientName[]>,
 ): void {
@@ -207,11 +232,7 @@ function handleTargetedEvent(
   switch (event.command) {
     case 'JOIN':
     case 'PART': {
-      if (parsed?.nick === undefined) {
-        return
-      }
-
-      const source: ChannelSource = { ...parsed, nick: parsed.nick }
+      const source: ChannelSource = { ...event.from }
       const channel = ensureChannel(event.target)
       channel.applySource(event, source)
       return
@@ -221,7 +242,9 @@ function handleTargetedEvent(
     case 'TOPIC':
     case 'RPL_TOPIC':
     case 'RPL_TOPICWHOTIME':
-    case 'RPL_NOTOPIC': {
+    case 'RPL_NOTOPIC':
+    case 'RPL_CHANNELMODEIS':
+    case 'RPL_CREATIONTIME': {
       const channel = ensureChannel(event.target)
       channel.apply(event, context)
       return
@@ -262,10 +285,8 @@ export function channelTracker(runtime: Runtime): void {
     runtime.channels.ensure(name, () => new Channel(name, (key) => runtime.caseFold(key)))
 
   runtime.on('clientEvent', (event) => {
-    const parsed = runtime.parseSource(event.source)
-
     if (event.target !== '') {
-      handleTargetedEvent(event, channelContext(runtime), parsed, ensureChannel, pendingNames)
+      handleTargetedEvent(event, channelContext(runtime), ensureChannel, pendingNames)
       return
     }
 
@@ -275,11 +296,7 @@ export function channelTracker(runtime: Runtime): void {
     switch (event.command) {
       case 'NICK':
       case 'QUIT': {
-        if (parsed?.nick === undefined) {
-          return
-        }
-
-        const source: ChannelSource = { ...parsed, nick: parsed.nick }
+        const source: ChannelSource = { ...event.from }
         for (const channel of runtime.channels.values()) {
           channel.applySource(event, source)
         }

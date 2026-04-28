@@ -121,10 +121,10 @@ function observeRegistrationMetadata(runtime: Runtime, message: IrcMessage): boo
     if (nick !== undefined && nick.length > 0) {
       runtime.connectionState.nick = nick
     }
-    if (self?.user !== undefined) {
+    if (self.user !== undefined) {
       runtime.connectionState.user = self.user
     }
-    if (self?.host !== undefined) {
+    if (self.host !== undefined) {
       runtime.connectionState.host = self.host
     }
     if (message.source !== undefined && message.source.length > 0) {

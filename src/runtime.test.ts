@@ -83,8 +83,8 @@ describe('Runtime', () => {
 
     runtime.register()
 
-    expect(runtime.parseSource('bot!u@h')?.isSelf).toBe(true)
-    expect(runtime.parseSource('other!u@h')?.isSelf).toBe(false)
+    expect(runtime.parseSource('bot!u@h').isSelf).toBe(true)
+    expect(runtime.parseSource('other!u@h').isSelf).toBe(false)
   })
 
   test('responds to server PING with PONG during registration', () => {
