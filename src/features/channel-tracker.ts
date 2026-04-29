@@ -1,6 +1,6 @@
 import { CaseFoldMap } from '../case-fold-map'
 import type { Runtime } from '../runtime'
-import type { ClientEvent, ClientModeChange, ClientName } from './client-events'
+import type { ClientEvent, ClientModeChange } from './client-events'
 
 export type ChannelTopic = {
   text: string
@@ -15,33 +15,6 @@ export type ChannelMember = {
 
 export type ChannelModeValue = string | true
 
-export type ChannelSource = {
-  name: string
-  user?: string
-  host?: string
-  isSelf: boolean
-}
-
-export type ChannelContext = {
-  currentNick: string
-  sameIdentifier: (left: string, right: string) => boolean
-}
-
-type ChannelSourceEvent = Extract<ClientEvent, { command: 'JOIN' | 'PART' | 'NICK' | 'QUIT' }>
-type ChannelEventWithoutSource = Extract<
-  ClientEvent,
-  {
-    command:
-      | 'KICK'
-      | 'TOPIC'
-      | 'MODE'
-      | 'RPL_TOPIC'
-      | 'RPL_TOPICWHOTIME'
-      | 'RPL_NOTOPIC'
-      | 'RPL_CHANNELMODEIS'
-      | 'RPL_CREATIONTIME'
-  }
->
 export type ChannelState = Channel
 
 export class Channel {
@@ -56,48 +29,6 @@ export class Channel {
   constructor(name: string, caseFold: (key: string) => string) {
     this.members = new CaseFoldMap(caseFold)
     this.name = name
-  }
-
-  // A channel is a small state machine over the client events that can affect
-  // the state a user expects to see for that channel.
-  applySource(event: ChannelSourceEvent, source: ChannelSource): void {
-    switch (event.command) {
-      case 'JOIN': {
-        if (source.isSelf) {
-          this.joined = true
-        }
-
-        this.addMember(source.name)
-        break
-      }
-
-      case 'PART': {
-        if (source.isSelf) {
-          this.joined = false
-        }
-
-        this.removeMember(source.name)
-        break
-      }
-
-      case 'QUIT': {
-        if (source.isSelf) {
-          this.joined = false
-        }
-
-        this.removeMember(source.name)
-        break
-      }
-
-      case 'NICK': {
-        this.renameMember(source.name, event.nick)
-        break
-      }
-
-      default: {
-        break
-      }
-    }
   }
 
   // Apply a mode change list to this channel, ignoring user-mode changes.
@@ -131,86 +62,25 @@ export class Channel {
     }
   }
 
-  apply(event: ChannelEventWithoutSource, context: ChannelContext): void {
-    switch (event.command) {
-      case 'KICK': {
-        if (context.sameIdentifier(event.kickedNick, context.currentNick)) {
-          this.joined = false
-        }
-
-        this.removeMember(event.kickedNick)
-        break
-      }
-
-      case 'TOPIC':
-      case 'RPL_TOPIC': {
-        this.topic = {
-          ...this.topic,
-          text: event.text,
-        }
-        break
-      }
-
-      case 'RPL_TOPICWHOTIME': {
-        this.topic = {
-          setAt: event.setAt,
-          setBy: event.nick,
-          text: this.topic?.text ?? '',
-        }
-        break
-      }
-
-      case 'RPL_NOTOPIC': {
-        this.topic = undefined
-        break
-      }
-
-      case 'RPL_CHANNELMODEIS': {
-        this.applyChanges(event.changes)
-        break
-      }
-
-      case 'RPL_CREATIONTIME': {
-        this.createdAt = event.setAt
-        break
-      }
-
-      case 'MODE': {
-        this.applyChanges(event.changes)
-        break
-      }
-
-      default: {
-        break
-      }
-    }
-  }
-
   // Server query results are allowed to replace member state when the feature
   // layer has assembled a complete logical names response.
-  setMembers(members: ClientName[]): void {
+  setMembers(members: ChannelMember[]): void {
     this.members.clear()
 
-    for (const namedMember of members) {
-      const member = this.members.ensure(namedMember.nick, () => ({
-        modes: new Set<string>(),
-        nick: namedMember.nick,
-      }))
-      for (const mode of namedMember.modes) {
-        member.modes.add(mode)
-      }
+    for (const member of members) {
+      this.members.set(member.nick, member)
     }
   }
 
-  private addMember(nick: string): ChannelMember {
+  addMember(nick: string): ChannelMember {
     return this.members.ensure(nick, () => ({ modes: new Set<string>(), nick }))
   }
 
-  private removeMember(nick: string): void {
+  removeMember(nick: string): void {
     this.members.delete(nick)
   }
 
-  private renameMember(previousNick: string, nick: string): void {
+  renameMember(previousNick: string, nick: string): void {
     const member = this.members.get(previousNick)
     if (member === undefined) {
       return
@@ -222,97 +92,153 @@ export class Channel {
   }
 }
 
-function handleTargetedEvent(
-  event: ClientEvent,
-  context: ChannelContext,
-  ensureChannel: (name: string) => Channel,
-  pendingNames: CaseFoldMap<ClientName[]>,
-): void {
-  // oxlint-disable-next-line typescript-eslint/switch-exhaustiveness-check
-  switch (event.command) {
-    case 'JOIN':
-    case 'PART': {
-      const source: ChannelSource = { ...event.from }
-      const channel = ensureChannel(event.target)
-      channel.applySource(event, source)
+type HandlerEvent<T extends string> = Extract<ClientEvent, { command: T }>
+
+// Channel state mutation handlers. Each key matches a ClientEvent command and
+// receives its specific event variant — no command guards needed inside. The map
+// lookup replaces both the router switch and Channel.apply: no double-dispatch.
+const channelHandlers = {
+  JOIN(channel: Channel, event: HandlerEvent<'JOIN'>) {
+    if (event.from.isSelf) {
+      channel.joined = true
+    }
+
+    channel.addMember(event.from.name)
+  },
+
+  PART(channel: Channel, event: HandlerEvent<'PART'>) {
+    if (event.from.isSelf) {
+      channel.joined = false
+    }
+
+    channel.removeMember(event.from.name)
+  },
+
+  QUIT(channel: Channel, event: HandlerEvent<'QUIT'>) {
+    if (event.from.isSelf) {
+      channel.joined = false
+    }
+
+    channel.removeMember(event.from.name)
+  },
+
+  KILL(channel: Channel, event: HandlerEvent<'KILL'>) {
+    if (event.from.isSelf) {
+      channel.joined = false
+    }
+
+    channel.removeMember(event.from.name)
+  },
+
+  NICK(channel: Channel, event: HandlerEvent<'NICK'>) {
+    channel.renameMember(event.from.name, event.nick)
+  },
+
+  KICK(channel: Channel, event: HandlerEvent<'KICK'>) {
+    if (event.nickIsSelf) {
+      channel.joined = false
+    }
+
+    channel.removeMember(event.nick)
+  },
+
+  TOPIC(channel: Channel, event: HandlerEvent<'TOPIC'>) {
+    if (event.text === '') {
+      channel.topic = undefined
       return
     }
 
-    case 'KICK':
-    case 'TOPIC':
-    case 'RPL_TOPIC':
-    case 'RPL_TOPICWHOTIME':
-    case 'RPL_NOTOPIC':
-    case 'RPL_CHANNELMODEIS':
-    case 'RPL_CREATIONTIME': {
-      const channel = ensureChannel(event.target)
-      channel.apply(event, context)
-      return
+    channel.topic = {
+      ...channel.topic,
+      setAt: String(Date.now() / 1000),
+      setBy: event.from.name,
+      text: event.text,
     }
+  },
 
-    case 'MODE': {
-      if (event.changes.every((change) => change.appliesTo === 'user')) {
-        return
+  RPL_TOPIC(channel: Channel, event: HandlerEvent<'RPL_TOPIC'>) {
+    channel.topic = {
+      ...channel.topic,
+      text: event.text,
+    }
+  },
+
+  RPL_TOPICWHOTIME(channel: Channel, event: HandlerEvent<'RPL_TOPICWHOTIME'>) {
+    channel.topic = {
+      setAt: event.setAt,
+      setBy: event.nick,
+      text: channel.topic?.text ?? '',
+    }
+  },
+
+  RPL_NOTOPIC() {
+    // RPL_NOTOPIC is the server's explicit response when querying a channel
+    // that has no topic set. Live clearing is handled by TOPIC with empty text.
+  },
+
+  RPL_CHANNELMODEIS(channel: Channel, event: HandlerEvent<'RPL_CHANNELMODEIS'>) {
+    channel.applyChanges(event.changes)
+  },
+
+  MODE(channel: Channel, event: HandlerEvent<'MODE'>) {
+    channel.applyChanges(event.changes)
+  },
+
+  RPL_CREATIONTIME(channel: Channel, event: HandlerEvent<'RPL_CREATIONTIME'>) {
+    channel.createdAt = event.setAt
+  },
+}
+
+type ChannelHandler = (channel: Channel, event: ClientEvent) => void
+
+export function channelTracker(runtime: Runtime): void {
+  const pendingNames = new CaseFoldMap<ChannelMember[]>((name) => runtime.caseFold(name))
+  const ensureChannel = (name: string) =>
+    runtime.channels.ensure(name, () => new Channel(name, (key) => runtime.caseFold(key)))
+
+  // The handler key matches the event command by construction — each handler
+  // receives its specific event variant. TypeScript cannot verify this
+  // correlation at the call site, so we cast once at the dispatch point.
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  const handlers = channelHandlers as unknown as Record<string, ChannelHandler>
+
+  runtime.on('clientEvent', (event) => {
+    // NAMES accumulation is a tracker concern, not a channel mutation.
+    if (event.command === 'RPL_NAMREPLY') {
+      ensureChannel(event.target)
+      for (const entry of event.members) {
+        const modes = new Set<string>()
+        if (entry.mode !== undefined) {
+          modes.add(entry.mode)
+        }
+
+        pendingNames.ensure(event.target, () => []).push({ modes, nick: entry.nick })
       }
 
-      const channel = ensureChannel(event.target)
-      channel.apply(event, context)
       return
     }
 
-    case 'RPL_NAMREPLY': {
-      ensureChannel(event.target)
-      pendingNames.ensure(event.target, () => []).push(...event.members)
-      return
-    }
-
-    case 'RPL_ENDOFNAMES': {
+    if (event.command === 'RPL_ENDOFNAMES') {
       const channel = ensureChannel(event.target)
       channel.setMembers(pendingNames.get(event.target) ?? [])
       pendingNames.delete(event.target)
       return
     }
 
-    default: {
-      break
-    }
-  }
-}
-
-export function channelTracker(runtime: Runtime): void {
-  const pendingNames = new CaseFoldMap<ClientName[]>((name) => runtime.caseFold(name))
-  const ensureChannel = (name: string) =>
-    runtime.channels.ensure(name, () => new Channel(name, (key) => runtime.caseFold(key)))
-
-  runtime.on('clientEvent', (event) => {
-    if (event.target !== '') {
-      handleTargetedEvent(event, channelContext(runtime), ensureChannel, pendingNames)
+    const handler = handlers[event.command]
+    if (handler === undefined) {
       return
     }
 
-    // Broadcast events do not name a channel, so each tracked channel decides
-    // whether the event affects its state.
-    // oxlint-disable-next-line typescript-eslint/switch-exhaustiveness-check
-    switch (event.command) {
-      case 'NICK':
-      case 'QUIT': {
-        const source: ChannelSource = { ...event.from }
-        for (const channel of runtime.channels.values()) {
-          channel.applySource(event, source)
-        }
-        return
-      }
+    // Targeted events mutate a single channel.
+    if (event.target !== '') {
+      handler(ensureChannel(event.target), event)
+      return
+    }
 
-      default: {
-        break
-      }
+    // Broadcast events mutate every tracked channel.
+    for (const channel of runtime.channels.values()) {
+      handler(channel, event)
     }
   })
-}
-
-function channelContext(runtime: Runtime): ChannelContext {
-  return {
-    currentNick: runtime.connectionState.nick,
-    sameIdentifier: (left, right) => runtime.sameIdentifier(left, right),
-  }
 }

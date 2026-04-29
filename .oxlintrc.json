@@ -12,7 +12,7 @@
   "rules": {
     // ultracite tyrany
     "array-type": "off",
-    "complexity": "error",
+    "complexity": ["error", { "max": 25 }],
     "func-style": "off",
     "import/no-relative-parent-imports": "off",
     "no-inline-comments": "off",

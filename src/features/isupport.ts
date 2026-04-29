@@ -33,9 +33,6 @@ function parseChanModes(value: string): [string, string, string, string] {
   return [groups[0] ?? '', groups[1] ?? '', groups[2] ?? '', groups[3] ?? '']
 }
 
-export type ModeChangeAppliesTo = 'channel' | 'member' | 'user'
-export type ModeChangeAction = 'add' | 'remove'
-
 export class IsupportMap {
   private readonly values = new Map<string, string | true>()
 
@@ -48,11 +45,13 @@ export class IsupportMap {
 
   // Cached derived values — recomputed alongside the strings they depend on.
   private prefixToModeCached: ReadonlyMap<string, string>
+  private prefixModesCached: string
   private chanModeGroupsCached: [string, string, string, string]
 
   constructor() {
     const parsed = parsePrefix(this.prefix)
     this.prefixToModeCached = parsed.prefixToMode
+    this.prefixModesCached = parsed.modes
     this.chanModeGroupsCached = parseChanModes(this.chanmodes)
   }
 
@@ -85,38 +84,19 @@ export class IsupportMap {
     return this.prefixToModeCached
   }
 
+  // PREFIX mode letters as a string (e.g. "ov").
+  get prefixModes(): string {
+    return this.prefixModesCached
+  }
+
+  // CHANMODES split into [typeA, typeB, typeC, typeD] groups.
+  get chanModeGroups(): [string, string, string, string] {
+    return this.chanModeGroupsCached
+  }
+
   // Whether a target string is a channel name per the advertised CHANTYPES.
   isChannel(target: string): boolean {
     return this.chantypes.includes(target[0] ?? '')
-  }
-
-  // What kind of entity a mode character applies to.
-  modeAppliesTo(target: string, mode: string): ModeChangeAppliesTo {
-    if (!this.isChannel(target)) {
-      return 'user'
-    }
-
-    if (this.prefixToModeCached.has(mode)) {
-      return 'member'
-    }
-
-    return 'channel'
-  }
-
-  // Whether a mode character requires an argument in the given direction.
-  // Prefix modes always require an argument. Among chan modes, types A and B
-  // always require one; type C requires one only when adding (not removing).
-  modeNeedsArgument(mode: string, action: ModeChangeAction): boolean {
-    if (this.prefixToModeCached.has(mode)) {
-      return true
-    }
-
-    const [typeA, typeB, typeC] = this.chanModeGroupsCached
-    if (typeA.includes(mode) || typeB.includes(mode)) {
-      return true
-    }
-
-    return action === 'add' && typeC.includes(mode)
   }
 
   // --- Arbitrary parameter lookup ---
@@ -159,6 +139,7 @@ export class IsupportMap {
       this.prefix = this.stringOrDefault('PREFIX')
       const parsed = parsePrefix(this.prefix)
       this.prefixToModeCached = parsed.prefixToMode
+      this.prefixModesCached = parsed.modes
     }
   }
 
@@ -171,6 +152,7 @@ export class IsupportMap {
 
     const parsed = parsePrefix(this.prefix)
     this.prefixToModeCached = parsed.prefixToMode
+    this.prefixModesCached = parsed.modes
     this.chanModeGroupsCached = parseChanModes(this.chanmodes)
   }
 

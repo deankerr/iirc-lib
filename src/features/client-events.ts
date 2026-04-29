@@ -1,22 +1,17 @@
 import { parseCtcp } from '../ctcp'
-import type { IsupportMap, ModeChangeAction, ModeChangeAppliesTo } from '../features/isupport'
+import type { IsupportMap } from '../features/isupport'
 import { Numeric } from '../numerics'
 import type { ParsedSource, Runtime } from '../runtime'
 import type { IrcMessage } from '../transport'
 
-export type ClientModeChangeAction = ModeChangeAction
-export type ClientModeChangeAppliesTo = ModeChangeAppliesTo
+export type ClientModeChangeAction = 'add' | 'remove'
+export type ClientModeChangeAppliesTo = 'channel' | 'member' | 'user'
 
 export type ClientModeChange = {
   action: ClientModeChangeAction
   appliesTo: ClientModeChangeAppliesTo
   mode: string
   argument?: string
-}
-
-export type ClientName = {
-  modes: string[]
-  nick: string
 }
 
 // Universal base shape computed for every message before enrichment.
@@ -90,9 +85,14 @@ const enrichers = {
     return { ...base, command: 'PART' as const, target, text }
   },
 
-  NICK({ base, message }: EnricherInput) {
+  NICK({ base, message, runtime }: EnricherInput) {
     const [nick = ''] = message.params
-    return { ...base, command: 'NICK' as const, nick, target: nick }
+    return {
+      ...base,
+      command: 'NICK' as const,
+      nick,
+      nickIsSelf: runtime.sameIdentifier(nick, runtime.connectionState.nick),
+    }
   },
 
   TOPIC({ base, message }: EnricherInput) {
@@ -110,14 +110,27 @@ const enrichers = {
     }
   },
 
-  INVITE({ base, message }: EnricherInput) {
-    const [invitedNick = '', target = ''] = message.params
-    return { ...base, command: 'INVITE' as const, invitedNick, target }
+  INVITE({ base, message, runtime }: EnricherInput) {
+    const [nick = '', target = ''] = message.params
+    return {
+      ...base,
+      command: 'INVITE' as const,
+      nick,
+      nickIsSelf: runtime.sameIdentifier(nick, runtime.connectionState.nick),
+      target,
+    }
   },
 
-  KICK({ base, message }: EnricherInput) {
-    const [target = '', kickedNick = '', text] = message.params
-    return { ...base, command: 'KICK' as const, kickedNick, target, text }
+  KICK({ base, message, runtime }: EnricherInput) {
+    const [target = '', nick = '', text] = message.params
+    return {
+      ...base,
+      command: 'KICK' as const,
+      nick,
+      nickIsSelf: runtime.sameIdentifier(nick, runtime.connectionState.nick),
+      target,
+      text,
+    }
   },
 
   PRIVMSG({ base, message }: EnricherInput) {
@@ -148,14 +161,31 @@ const enrichers = {
     return { ...base, command: 'QUIT' as const, text }
   },
 
+  KILL({ base, message }: EnricherInput) {
+    const [, text] = message.params
+    return { ...base, command: 'KILL' as const, text }
+  },
+
+  ERROR({ base, message }: EnricherInput) {
+    const [text] = message.params
+    return { ...base, command: 'ERROR' as const, text }
+  },
+
   RPL_TOPIC({ base, message }: EnricherInput) {
     const [, target = '', text = ''] = message.params
     return { ...base, command: 'RPL_TOPIC' as const, target, text }
   },
 
-  RPL_TOPICWHOTIME({ base, message }: EnricherInput) {
+  RPL_TOPICWHOTIME({ base, message, runtime }: EnricherInput) {
     const [, target = '', nick = '', setAt = ''] = message.params
-    return { ...base, command: 'RPL_TOPICWHOTIME' as const, nick, setAt, target }
+    return {
+      ...base,
+      command: 'RPL_TOPICWHOTIME' as const,
+      nick,
+      nickIsSelf: runtime.sameIdentifier(nick, runtime.connectionState.nick),
+      setAt,
+      target,
+    }
   },
 
   RPL_NAMREPLY({ base, message, runtime }: EnricherInput) {
@@ -164,10 +194,21 @@ const enrichers = {
     return {
       ...base,
       command: 'RPL_NAMREPLY' as const,
+      // NAMES replies carry at most one prefix character (@, +, etc.) ahead of
+      // the nick, representing the highest channel membership mode. The
+      // multi-prefix IRCv3 extension allows multiple, but we don't negotiate it
+      // yet — so exactly one character is correct.
       members: rawNames
         .split(' ')
         .filter((name) => name.length > 0)
-        .map((name) => parseName(runtime.isupport, name)),
+        .map((name) => {
+          const mode = runtime.isupport.prefixToMode.get(name[0] ?? '')
+          if (mode === undefined) {
+            return { nick: name }
+          }
+
+          return { mode, nick: name.slice(1) }
+        }),
       target,
     }
   },
@@ -266,7 +307,7 @@ export function clientEvents(runtime: Runtime): void {
 // IRC MODE strings combine a direction (+/-) with one or more mode letters,
 // drawing arguments from a trailing list. This function walks the mode string
 // character by character, tracking the current direction, classifying each
-// mode via ISUPPORT, and consuming arguments where required.
+// mode via ISUPPORT data, and consuming arguments where required.
 function parseModeChanges(
   isupport: IsupportMap,
   target: string,
@@ -274,8 +315,12 @@ function parseModeChanges(
   args: string[],
 ): ClientModeChange[] {
   const changes: ClientModeChange[] = []
-  let action: ModeChangeAction = 'add'
+  let action: ClientModeChangeAction = 'add'
   let argIndex = 0
+
+  const isChannel = isupport.isChannel(target)
+  const [typeA, typeB, typeC] = isupport.chanModeGroups
+  const { prefixModes } = isupport
 
   for (const mode of modes) {
     if (mode === '+') {
@@ -288,37 +333,40 @@ function parseModeChanges(
       continue
     }
 
-    const appliesTo = isupport.modeAppliesTo(target, mode)
+    // User mode — target is not a channel.
+    if (!isChannel) {
+      changes.push({ action, appliesTo: 'user', mode })
+      continue
+    }
 
-    if (isupport.modeNeedsArgument(mode, action)) {
-      changes.push({ action, appliesTo, argument: args[argIndex] ?? '', mode })
+    // Prefix mode (o, v, etc.) — always a member mode, always takes argument.
+    if (prefixModes.includes(mode)) {
+      changes.push({ action, appliesTo: 'member', argument: args[argIndex] ?? '', mode })
       argIndex += 1
       continue
     }
 
-    changes.push({ action, appliesTo, mode })
+    // Channel mode type A or B — always takes argument.
+    if (typeA.includes(mode) || typeB.includes(mode)) {
+      changes.push({ action, appliesTo: 'channel', argument: args[argIndex] ?? '', mode })
+      argIndex += 1
+      continue
+    }
+
+    // Channel mode type C — argument only when adding.
+    if (typeC.includes(mode)) {
+      if (action === 'add') {
+        changes.push({ action, appliesTo: 'channel', argument: args[argIndex] ?? '', mode })
+        argIndex += 1
+      } else {
+        changes.push({ action, appliesTo: 'channel', mode })
+      }
+      continue
+    }
+
+    // Channel mode type D — never takes argument.
+    changes.push({ action, appliesTo: 'channel', mode })
   }
 
   return changes
-}
-
-// NAMES replies carry prefix characters (@, +, etc.) ahead of each nick.
-// Strip them by looking up each leading character in the ISUPPORT prefix map
-// and collecting the corresponding mode letters until a non-prefix character
-// is found.
-function parseName(isupport: IsupportMap, name: string): ClientName {
-  const modes: string[] = []
-  let nickStart = 0
-
-  while (nickStart < name.length) {
-    const mode = isupport.prefixToMode.get(name[nickStart] ?? '')
-    if (mode === undefined) {
-      break
-    }
-
-    modes.push(mode)
-    nickStart += 1
-  }
-
-  return { modes, nick: name.slice(nickStart) }
 }
