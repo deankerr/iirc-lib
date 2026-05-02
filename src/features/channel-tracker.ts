@@ -231,7 +231,7 @@ export function channelTracker(runtime: Runtime): void {
     }
 
     // Targeted events mutate a single channel.
-    if (event.target !== '') {
+    if ('target' in event && typeof event.target === 'string') {
       handler(ensureChannel(event.target), event)
       return
     }

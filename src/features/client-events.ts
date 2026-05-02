@@ -18,7 +18,6 @@ export type ClientModeChange = {
 type ClientEventBase = {
   raw: IrcMessage
   from: ParsedSource
-  target: string
   command: string
 }
 
@@ -68,7 +67,6 @@ function createBaseEvent(runtime: Runtime, message: IrcMessage, command: string)
     command,
     from: runtime.parseSource(message.source),
     raw: message,
-    target: '',
   }
 }
 
