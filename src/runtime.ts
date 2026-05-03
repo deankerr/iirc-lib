@@ -2,21 +2,19 @@ import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 
 import { CaseFoldMap } from './case-fold-map'
-import { resolveConfig } from './config'
 import type { RuntimeConfig, RuntimeInputConfig } from './config'
-import { buildEvent } from './events'
+import { resolveConfig } from './config'
 import type { IrcEvent } from './events'
+import { buildEvent } from './events'
 import type { Channel } from './features/channel-tracker'
 import { channelTracker } from './features/channel-tracker'
-import { clientEvents } from './features/client-events'
-import type { ClientEvent } from './features/client-events'
 import { identity } from './features/identity'
 import { IsupportMap, isupport } from './features/isupport'
 import { ping } from './features/ping'
 import { registration } from './features/registration'
 import { Numeric } from './numerics'
-import { Transport } from './transport'
 import type { IrcCommand, IrcMessage } from './transport'
+import { Transport } from './transport'
 
 export type RuntimeFeature = (runtime: Runtime) => void
 
@@ -38,7 +36,6 @@ const defaultRuntimeFeatures: RuntimeFeature[] = [
   ping,
   identity,
   isupport,
-  clientEvents,
   channelTracker,
 ]
 
@@ -46,7 +43,6 @@ export type RuntimeEvents = {
   register: [stream: Duplex]
   message: [IrcMessage]
   event: [event: IrcEvent]
-  clientEvent: [event: ClientEvent]
   registered: []
   close: []
   error: [Error]
