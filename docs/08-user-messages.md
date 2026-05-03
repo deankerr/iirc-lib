@@ -146,42 +146,6 @@ TOPIC #test :                   ; Clearing the topic on "#test"
 TOPIC #test                     ; Checking the topic for "#test"
 ```
 
-### NAMES message
-
-```
-Command: NAMES
-  Parameters: <channel>{,<channel>}
-```
-
-The `NAMES` command views the nicknames joined to a channel and their channel membership prefixes. The parameter is a list of channel names delimited by comma `(",", 0x2C)`.
-
-- Channels are evaluated one-by-one. For each channel that exists and the client can see users in, the server returns one or more RPL_NAMREPLY (353) numerics and a single RPL_ENDOFNAMES (366) numeric.
-- If the channel name is invalid or does not exist, one RPL_ENDOFNAMES numeric containing the given channel name is returned.
-- If the channel has the secret channel mode set and the user is not joined, one RPL_ENDOFNAMES numeric is returned.
-- Users with the invisible user mode set are not shown unless the requesting client is also joined to that channel.
-- Servers MAY allow more than one target channel. They can advertise the maximum via the TARGMAX RPL_ISUPPORT parameter.
-
-Numeric Replies:
-
-- RPL_NAMREPLY (353)
-- RPL_ENDOFNAMES (366)
-
-Command Examples:
-
-```
-NAMES #twilight_zone,#42        ; List all visible users on
-                                "#twilight_zone" and "#42".
-
-NAMES                           ; Attempt to list all visible users on
-                                the network, which SHOULD be responded to
-                                as specified above.
-```
-
-See also:
-
-- IRCv3 multi-prefix Extension
-- IRCv3 userhost-in-names Extension
-
 ### INVITE message
 
 ```

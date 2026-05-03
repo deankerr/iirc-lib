@@ -4,6 +4,8 @@ import type { Duplex } from 'node:stream'
 import { CaseFoldMap } from './case-fold-map'
 import { resolveConfig } from './config'
 import type { RuntimeConfig, RuntimeInputConfig } from './config'
+import { buildEvent } from './events'
+import type { IrcEvent } from './events'
 import type { Channel } from './features/channel-tracker'
 import { channelTracker } from './features/channel-tracker'
 import { clientEvents } from './features/client-events'
@@ -33,6 +35,7 @@ const defaultRuntimeFeatures: RuntimeFeature[] = [
 export type RuntimeEvents = {
   register: [stream: Duplex]
   message: [IrcMessage]
+  event: [event: IrcEvent]
   clientEvent: [event: ClientEvent]
   registered: []
   close: []
@@ -84,7 +87,13 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
 
     this.transport = transport
 
-    this.transport.on('message', (message) => this.emit('message', message))
+    this.transport.on('message', (message) => {
+      this.emit('message', message)
+      const event = buildEvent(message, this.parseSource(message.source))
+      if (event !== undefined) {
+        this.emit('event', event)
+      }
+    })
     this.transport.on('close', () => {
       this.handleClose()
     })

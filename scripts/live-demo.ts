@@ -16,7 +16,11 @@ runtime.on('registered', () => {
   runtime.send('JOIN', CHANNEL)
 })
 
-runtime.on('clientEvent', (event) => {
+// runtime.on('clientEvent', (event) => {
+//   console.log(event)
+// })
+
+runtime.on('event', (event) => {
   console.log(event)
 })
 

@@ -31,5 +31,13 @@
 
     // project
     "unicorn/prefer-event-target": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/events/**"],
+      "rules": {
+        "sort-keys": "off"
+      }
+    }
+  ]
 }
