@@ -23,7 +23,7 @@ type BuildEvents<T extends Record<string, (ctx: EnricherCtx) => object>> = {
 export type IrcEvent = BuildEvents<typeof allEnrichers>
 
 // Replaces manual Extract<IrcEvent, { command: T }> at call sites.
-export type EventOf<T extends IrcEvent['command'] = keyof typeof allEnrichers> = Extract<
+export type IrcEventOf<T extends IrcEvent['command'] = keyof typeof allEnrichers> = Extract<
   IrcEvent,
   { command: T }
 >

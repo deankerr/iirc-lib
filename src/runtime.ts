@@ -20,6 +20,16 @@ import type { IrcCommand, IrcMessage } from './transport'
 
 export type RuntimeFeature = (runtime: Runtime) => void
 
+export type ClientModeChangeAction = 'add' | 'remove'
+export type ClientModeChangeAppliesTo = 'channel' | 'member' | 'user'
+
+export type ClientModeChange = {
+  action: ClientModeChangeAction
+  appliesTo: ClientModeChangeAppliesTo
+  mode: string
+  argument?: string
+}
+
 // Features are applied in order. clientEvents must precede any feature that
 // subscribes to 'clientEvent', because EventEmitter delivers synchronously and
 // a subscriber that has not yet been registered will miss events.
@@ -215,6 +225,78 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
 
   private handleError(error: Error): void {
     this.emit('error', error)
+  }
+
+  parseNames(names: string) {
+    return names
+      .split(' ')
+      .filter((name) => name.length > 0)
+      .map((name) => {
+        const mode = this.isupport.prefixToMode.get(name[0] ?? '')
+        if (mode === undefined) {
+          return { nick: name }
+        }
+
+        return { mode, nick: name.slice(1) }
+      })
+  }
+
+  parseModeChanges(target: string, modes: string, args: string[]): ClientModeChange[] {
+    const changes: ClientModeChange[] = []
+    let action: ClientModeChangeAction = 'add'
+    let argIndex = 0
+
+    const isChannel = this.isupport.isChannel(target)
+    const [typeA, typeB, typeC] = this.isupport.chanModeGroups
+    const { prefixModes } = this.isupport
+
+    for (const mode of modes) {
+      if (mode === '+') {
+        action = 'add'
+        continue
+      }
+
+      if (mode === '-') {
+        action = 'remove'
+        continue
+      }
+
+      // User mode — target is not a channel.
+      if (!isChannel) {
+        changes.push({ action, appliesTo: 'user', mode })
+        continue
+      }
+
+      // Prefix mode (o, v, etc.) — always a member mode, always takes argument.
+      if (prefixModes.includes(mode)) {
+        changes.push({ action, appliesTo: 'member', argument: args[argIndex] ?? '', mode })
+        argIndex += 1
+        continue
+      }
+
+      // Channel mode type A or B — always takes argument.
+      if (typeA.includes(mode) || typeB.includes(mode)) {
+        changes.push({ action, appliesTo: 'channel', argument: args[argIndex] ?? '', mode })
+        argIndex += 1
+        continue
+      }
+
+      // Channel mode type C — argument only when adding.
+      if (typeC.includes(mode)) {
+        if (action === 'add') {
+          changes.push({ action, appliesTo: 'channel', argument: args[argIndex] ?? '', mode })
+          argIndex += 1
+        } else {
+          changes.push({ action, appliesTo: 'channel', mode })
+        }
+        continue
+      }
+
+      // Channel mode type D — never takes argument.
+      changes.push({ action, appliesTo: 'channel', mode })
+    }
+
+    return changes
   }
 }
 

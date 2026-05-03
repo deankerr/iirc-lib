@@ -1,6 +1,5 @@
 import { CaseFoldMap } from '../case-fold-map'
-import type { Runtime } from '../runtime'
-import type { ClientEvent, ClientModeChange } from './client-events'
+import type { ClientModeChange, Runtime } from '../runtime'
 
 export type ChannelTopic = {
   text: string
@@ -31,7 +30,6 @@ export class Channel {
     this.name = name
   }
 
-  // Apply a mode change list to this channel, ignoring user-mode changes.
   applyChanges(changes: ClientModeChange[]): void {
     for (const change of changes) {
       if (change.appliesTo === 'user') {
@@ -62,8 +60,6 @@ export class Channel {
     }
   }
 
-  // Server query results are allowed to replace member state when the feature
-  // layer has assembled a complete logical names response.
   setMembers(members: ChannelMember[]): void {
     this.members.clear()
 
@@ -92,153 +88,143 @@ export class Channel {
   }
 }
 
-type HandlerEvent<T extends string> = Extract<ClientEvent, { command: T }>
-
-// Channel state mutation handlers. Each key matches a ClientEvent command and
-// receives its specific event variant — no command guards needed inside. The map
-// lookup replaces both the router switch and Channel.apply: no double-dispatch.
-const channelHandlers = {
-  JOIN(channel: Channel, event: HandlerEvent<'JOIN'>) {
-    if (event.from.isSelf) {
-      channel.joined = true
-    }
-
-    channel.addMember(event.from.name)
-  },
-
-  PART(channel: Channel, event: HandlerEvent<'PART'>) {
-    if (event.from.isSelf) {
-      channel.joined = false
-    }
-
-    channel.removeMember(event.from.name)
-  },
-
-  QUIT(channel: Channel, event: HandlerEvent<'QUIT'>) {
-    if (event.from.isSelf) {
-      channel.joined = false
-    }
-
-    channel.removeMember(event.from.name)
-  },
-
-  KILL(channel: Channel, event: HandlerEvent<'KILL'>) {
-    if (event.from.isSelf) {
-      channel.joined = false
-    }
-
-    channel.removeMember(event.from.name)
-  },
-
-  NICK(channel: Channel, event: HandlerEvent<'NICK'>) {
-    channel.renameMember(event.from.name, event.nick)
-  },
-
-  KICK(channel: Channel, event: HandlerEvent<'KICK'>) {
-    if (event.nickIsSelf) {
-      channel.joined = false
-    }
-
-    channel.removeMember(event.nick)
-  },
-
-  TOPIC(channel: Channel, event: HandlerEvent<'TOPIC'>) {
-    if (event.text === '') {
-      channel.topic = undefined
-      return
-    }
-
-    channel.topic = {
-      ...channel.topic,
-      setAt: String(Date.now() / 1000),
-      setBy: event.from.name,
-      text: event.text,
-    }
-  },
-
-  RPL_TOPIC(channel: Channel, event: HandlerEvent<'RPL_TOPIC'>) {
-    channel.topic = {
-      ...channel.topic,
-      text: event.text,
-    }
-  },
-
-  RPL_TOPICWHOTIME(channel: Channel, event: HandlerEvent<'RPL_TOPICWHOTIME'>) {
-    channel.topic = {
-      setAt: event.setAt,
-      setBy: event.nick,
-      text: channel.topic?.text ?? '',
-    }
-  },
-
-  RPL_NOTOPIC() {
-    // RPL_NOTOPIC is the server's explicit response when querying a channel
-    // that has no topic set. Live clearing is handled by TOPIC with empty text.
-  },
-
-  RPL_CHANNELMODEIS(channel: Channel, event: HandlerEvent<'RPL_CHANNELMODEIS'>) {
-    channel.applyChanges(event.changes)
-  },
-
-  MODE(channel: Channel, event: HandlerEvent<'MODE'>) {
-    channel.applyChanges(event.changes)
-  },
-
-  RPL_CREATIONTIME(channel: Channel, event: HandlerEvent<'RPL_CREATIONTIME'>) {
-    channel.createdAt = event.setAt
-  },
-}
-
-type ChannelHandler = (channel: Channel, event: ClientEvent) => void
-
 export function channelTracker(runtime: Runtime): void {
   const pendingNames = new CaseFoldMap<ChannelMember[]>((name) => runtime.caseFold(name))
   const ensureChannel = (name: string) =>
     runtime.channels.ensure(name, () => new Channel(name, (key) => runtime.caseFold(key)))
 
-  // The handler key matches the event command by construction — each handler
-  // receives its specific event variant. TypeScript cannot verify this
-  // correlation at the call site, so we cast once at the dispatch point.
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  const handlers = channelHandlers as unknown as Record<string, ChannelHandler>
-
-  runtime.on('clientEvent', (event) => {
-    // NAMES accumulation is a tracker concern, not a channel mutation.
+  runtime.on('event', (event) => {
     if (event.command === 'RPL_NAMREPLY') {
-      ensureChannel(event.target)
-      for (const entry of event.members) {
+      ensureChannel(event.channel)
+
+      const members = runtime.parseNames(event.names)
+
+      for (const entry of members) {
         const modes = new Set<string>()
+
         if (entry.mode !== undefined) {
           modes.add(entry.mode)
         }
 
-        pendingNames.ensure(event.target, () => []).push({ modes, nick: entry.nick })
+        pendingNames.ensure(event.channel, () => []).push({ modes, nick: entry.nick })
       }
 
       return
     }
 
     if (event.command === 'RPL_ENDOFNAMES') {
+      const channel = ensureChannel(event.channel)
+      channel.setMembers(pendingNames.get(event.channel) ?? [])
+      pendingNames.delete(event.channel)
+      return
+    }
+
+    if (event.command === 'MODE') {
       const channel = ensureChannel(event.target)
-      channel.setMembers(pendingNames.get(event.target) ?? [])
-      pendingNames.delete(event.target)
+      const changes = runtime.parseModeChanges(event.target, event.modestring ?? '', event.modeArgs)
+      channel.applyChanges(changes)
       return
     }
 
-    const handler = handlers[event.command]
-    if (handler === undefined) {
+    if (event.command === 'RPL_CHANNELMODEIS') {
+      const channel = ensureChannel(event.channel)
+      const changes = runtime.parseModeChanges(
+        event.channel,
+        event.modestring ?? '',
+        event.modeArgs,
+      )
+      channel.applyChanges(changes)
       return
     }
 
-    // Targeted events mutate a single channel.
-    if ('target' in event && typeof event.target === 'string') {
-      handler(ensureChannel(event.target), event)
+    if (event.command === 'JOIN') {
+      const channel = ensureChannel(event.channel)
+      if (event.from.isSelf) {
+        channel.joined = true
+      }
+
+      channel.addMember(event.from.name)
       return
     }
 
-    // Broadcast events mutate every tracked channel.
-    for (const channel of runtime.channels.values()) {
-      handler(channel, event)
+    if (event.command === 'PART') {
+      const channel = ensureChannel(event.channel)
+      if (event.from.isSelf) {
+        channel.joined = false
+      }
+
+      channel.removeMember(event.from.name)
+      return
+    }
+
+    if (event.command === 'TOPIC') {
+      const channel = ensureChannel(event.channel)
+      if (event.topic === undefined || event.topic === '') {
+        channel.topic = undefined
+        return
+      }
+
+      channel.topic = {
+        ...channel.topic,
+        setAt: String(Date.now() / 1000),
+        setBy: event.from.name,
+        text: event.topic,
+      }
+      return
+    }
+
+    if (event.command === 'RPL_TOPIC') {
+      const channel = ensureChannel(event.channel)
+      channel.topic = {
+        ...channel.topic,
+        text: event.topic,
+      }
+      return
+    }
+
+    if (event.command === 'RPL_TOPICWHOTIME') {
+      const channel = ensureChannel(event.channel)
+      channel.topic = {
+        setAt: event.setat,
+        setBy: event.nick,
+        text: channel.topic?.text ?? '',
+      }
+      return
+    }
+
+    if (event.command === 'RPL_CREATIONTIME') {
+      const channel = ensureChannel(event.channel)
+      channel.createdAt = event.creationtime
+      return
+    }
+
+    if (event.command === 'KICK') {
+      const channel = ensureChannel(event.channel)
+      channel.removeMember(event.user)
+
+      if (event.user === runtime.connectionState.nick) {
+        channel.joined = false
+      }
+      return
+    }
+
+    if (event.command === 'QUIT' || event.command === 'KILL') {
+      if (event.from.isSelf) {
+        for (const channel of runtime.channels.values()) {
+          channel.joined = false
+        }
+      }
+
+      for (const channel of runtime.channels.values()) {
+        channel.removeMember(event.from.name)
+      }
+      return
+    }
+
+    if (event.command === 'NICK') {
+      for (const channel of runtime.channels.values()) {
+        channel.renameMember(event.from.name, event.newnick)
+      }
     }
   })
 }

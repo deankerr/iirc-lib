@@ -38,6 +38,12 @@
       "rules": {
         "sort-keys": "off"
       }
+    },
+    {
+      "files": ["src/features/channel-tracker.ts"],
+      "rules": {
+        "complexity": "off"
+      }
     }
   ]
 }
