@@ -40,7 +40,7 @@
       }
     },
     {
-      "files": ["src/features/channel-tracker.ts"],
+      "files": ["src/features/channel-tracker.ts", "src/features/registration.ts"],
       "rules": {
         "complexity": "off"
       }

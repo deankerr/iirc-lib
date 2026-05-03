@@ -1,10 +1,10 @@
 import type { Runtime } from '../runtime'
 
 export function ping(runtime: Runtime): void {
-  runtime.on('message', (message) => {
-    if (message.command !== 'PING') {
+  runtime.on('event', (event) => {
+    if (event.command !== 'PING') {
       return
     }
-    runtime.send('PONG', message.params[0] ?? '')
+    runtime.send('PONG', event.token)
   })
 }

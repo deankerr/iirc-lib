@@ -120,19 +120,18 @@ export function channelTracker(runtime: Runtime): void {
     }
 
     if (event.command === 'MODE') {
+      if (!runtime.isChannel(event.target)) {
+        return
+      }
       const channel = ensureChannel(event.target)
-      const changes = runtime.parseModeChanges(event.target, event.modestring ?? '', event.modeArgs)
+      const changes = runtime.parseModeChanges(event.target, event.modestring, event.modeArgs)
       channel.applyChanges(changes)
       return
     }
 
     if (event.command === 'RPL_CHANNELMODEIS') {
       const channel = ensureChannel(event.channel)
-      const changes = runtime.parseModeChanges(
-        event.channel,
-        event.modestring ?? '',
-        event.modeArgs,
-      )
+      const changes = runtime.parseModeChanges(event.channel, event.modestring, event.modeArgs)
       channel.applyChanges(changes)
       return
     }
@@ -159,7 +158,7 @@ export function channelTracker(runtime: Runtime): void {
 
     if (event.command === 'TOPIC') {
       const channel = ensureChannel(event.channel)
-      if (event.topic === undefined || event.topic === '') {
+      if (event.topic === '') {
         channel.topic = undefined
         return
       }
@@ -170,6 +169,12 @@ export function channelTracker(runtime: Runtime): void {
         setBy: event.from.name,
         text: event.topic,
       }
+      return
+    }
+
+    if (event.command === 'RPL_NOTOPIC') {
+      const channel = ensureChannel(event.channel)
+      channel.topic = undefined
       return
     }
 
@@ -202,13 +207,13 @@ export function channelTracker(runtime: Runtime): void {
       const channel = ensureChannel(event.channel)
       channel.removeMember(event.user)
 
-      if (event.user === runtime.connectionState.nick) {
+      if (runtime.sameIdentifier(event.user, runtime.connectionState.nick)) {
         channel.joined = false
       }
       return
     }
 
-    if (event.command === 'QUIT' || event.command === 'KILL') {
+    if (event.command === 'QUIT') {
       if (event.from.isSelf) {
         for (const channel of runtime.channels.values()) {
           channel.joined = false
@@ -217,6 +222,19 @@ export function channelTracker(runtime: Runtime): void {
 
       for (const channel of runtime.channels.values()) {
         channel.removeMember(event.from.name)
+      }
+      return
+    }
+
+    if (event.command === 'KILL') {
+      if (runtime.sameIdentifier(event.nickname, runtime.connectionState.nick)) {
+        for (const channel of runtime.channels.values()) {
+          channel.joined = false
+        }
+      }
+
+      for (const channel of runtime.channels.values()) {
+        channel.removeMember(event.nickname)
       }
       return
     }

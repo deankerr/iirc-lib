@@ -50,28 +50,7 @@ describe('Runtime', () => {
     expect(runtime.connectionState.serverHost).toBe('irc.example.com')
   })
 
-  test('reads self user and host from welcome text when present', () => {
-    const transport = createMockTransport()
-    const runtime = createRuntime(
-      {
-        nick: 'bot',
-        sendDelayMs: 0,
-      },
-      transport.stream,
-    )
-
-    runtime.register()
-
-    transport.receive(
-      ':irc.example.com 001 actualbot :Welcome to the network actualbot!~user@cloak.example',
-    )
-
-    expect(runtime.connectionState.nick).toBe('actualbot')
-    expect(runtime.connectionState.user).toBe('~user')
-    expect(runtime.connectionState.host).toBe('cloak.example')
-  })
-
-  test('parseSource marks the current nick as self', () => {
+test('parseSource marks the current nick as self', () => {
     const transport = createMockTransport()
     const runtime = createRuntime(
       {

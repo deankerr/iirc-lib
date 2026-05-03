@@ -13,10 +13,10 @@ export const commandEnrichers = {
     text: req(),
   }),
 
-  // params: <channel> [<topic>]
-  TOPIC: ({ req, opt }: EnricherCtx) => ({
+  // params: <channel> <topic>
+  TOPIC: ({ req, str }: EnricherCtx) => ({
     channel: req(),
-    topic: opt(),
+    topic: str(),
   }),
 
   // params: <token>
@@ -35,10 +35,10 @@ export const commandEnrichers = {
     reason: req(),
   }),
 
-  // params: <target> [<modestring> [<mode arguments>...]]
-  MODE: ({ req, opt, rest }: EnricherCtx) => ({
+  // params: <target> <modestring> [<mode arguments>...]
+  MODE: ({ req, rest }: EnricherCtx) => ({
     target: req(),
-    modestring: opt(),
+    modestring: req(),
     modeArgs: rest(),
   }),
 
@@ -53,19 +53,23 @@ export const commandEnrichers = {
     message: req(),
   }),
 
+  // params: <channel>
   JOIN: ({ req }: EnricherCtx) => ({
     channel: req(),
   }),
 
+  // params: <channel> [<reason>]
   PART: ({ req, opt }: EnricherCtx) => ({
     channel: req(),
     reason: opt(),
   }),
 
+  // params: [<reason>]
   QUIT: ({ opt }: EnricherCtx) => ({
     reason: opt(),
   }),
 
+  // params: <newnick>
   NICK: ({ req }: EnricherCtx) => ({
     newnick: req(),
   }),
@@ -76,6 +80,7 @@ export const commandEnrichers = {
     comment: opt(),
   }),
 
+  // params: <nickname> <channel>
   INVITE: ({ req }: EnricherCtx) => ({
     nickname: req(),
     channel: req(),

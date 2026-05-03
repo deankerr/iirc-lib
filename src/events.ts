@@ -49,6 +49,14 @@ function makeCtx(params: string[]): EnricherCtx {
       i = params.length
       return v
     },
+    str: () => {
+      const v = params[i]
+      i += 1
+      if (v === undefined) {
+        throw new Error(`irc: required param missing at index ${i - 1}`)
+      }
+      return v
+    },
   }
 }
 

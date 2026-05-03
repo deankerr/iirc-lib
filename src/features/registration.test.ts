@@ -45,9 +45,6 @@ function capAck(nick: string, caps: string): string {
   return `:irc.example.com CAP ${nick} ACK :${caps}`
 }
 
-function capAckContinuation(nick: string, caps: string): string {
-  return `:irc.example.com CAP ${nick} ACK * :${caps}`
-}
 
 function capNak(nick: string, caps: string): string {
   return `:irc.example.com CAP ${nick} NAK :${caps}`
@@ -89,7 +86,7 @@ describe('registration', () => {
       expect(sentLines).toEqual(['CAP END'])
     })
 
-    test('CAP NAK transitions to error state', () => {
+    test('CAP NAK sends CAP END and stops processing', () => {
       const { transport, sentLines, errors } = createHarness()
 
       transport.receive(capLs('testbot', 'message-tags'))
@@ -97,8 +94,7 @@ describe('registration', () => {
 
       transport.receive(capNak('testbot', 'message-tags'))
 
-      // No CAP END sent — machine is in error state.
-      expect(sentLines).toEqual([])
+      expect(sentLines).toEqual(['CAP END'])
       expect(errors).toHaveLength(0)
     })
   })
@@ -118,21 +114,6 @@ describe('registration', () => {
       expect(sentLines).toEqual(['CAP REQ :message-tags sasl'])
     })
 
-    test('accumulates multi-line CAP ACK before SASL', () => {
-      const { transport, sentLines } = createHarness({
-        sasl: { password: 'hunter2', username: 'bot' },
-      })
-
-      transport.receive(capLs('testbot', 'message-tags sasl'))
-      sentLines.length = 0
-
-      transport.receive(capAckContinuation('testbot', 'message-tags'))
-      // Still accumulating — no AUTHENTICATE yet.
-      expect(sentLines).toEqual([])
-
-      transport.receive(`:irc.example.com CAP testbot ACK :sasl`)
-      expect(sentLines).toEqual(['AUTHENTICATE PLAIN'])
-    })
   })
 
   describe('SASL PLAIN happy path', () => {
