@@ -45,7 +45,6 @@ function capAck(nick: string, caps: string): string {
   return `:irc.example.com CAP ${nick} ACK :${caps}`
 }
 
-
 function capNak(nick: string, caps: string): string {
   return `:irc.example.com CAP ${nick} NAK :${caps}`
 }
@@ -113,7 +112,6 @@ describe('registration', () => {
 
       expect(sentLines).toEqual(['CAP REQ :message-tags sasl'])
     })
-
   })
 
   describe('SASL PLAIN happy path', () => {

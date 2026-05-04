@@ -68,7 +68,15 @@ export class Transport extends EventEmitter<TransportEvents> {
   }
 
   private handleChunk(chunk: string): void {
-    const lines = this.inputBuffer.push(chunk)
+    const { lines, overflowExcerpt } = this.inputBuffer.push(chunk)
+
+    if (overflowExcerpt !== undefined) {
+      this.emit(
+        'parse_error',
+        overflowExcerpt,
+        new Error('IRC line exceeded maximum length and was discarded'),
+      )
+    }
 
     for (const line of lines) {
       if (line.length === 0) {

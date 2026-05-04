@@ -66,7 +66,7 @@ export type ParsedSource = {
   isSelf: boolean
 }
 
-const UNKNOWN_SOURCE: ParsedSource = { isSelf: false, name: '(unknown)' }
+
 
 export class Runtime extends EventEmitter<RuntimeEvents> {
   readonly numerics = Numeric
@@ -103,9 +103,11 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
       }
       this.emit('event', event)
     })
+
     this.transport.on('close', () => {
       this.handleClose()
     })
+
     this.transport.on('error', (error) => {
       this.handleError(error)
     })
@@ -188,7 +190,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   // arbitrary string — name reflects that it might not be a nick.
   parseSource(source: string | undefined): ParsedSource {
     if (source === undefined || source.length === 0) {
-      return UNKNOWN_SOURCE
+      return { isSelf: false, name: this.connectionState.serverHost ?? '' }
     }
 
     const bangIndex = source.indexOf('!')

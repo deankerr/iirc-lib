@@ -4,7 +4,7 @@ import type { IrcMessage } from './types'
 // Caller guarantees the line has no \r\n and is non-empty.
 export function parseMessage(line: string): IrcMessage {
   let pos = 0
-  let tags: Record<string, string> | undefined
+  let tags: Record<string, string> = {}
   let source: string | undefined
 
   if (line[pos] === '@') {
@@ -44,10 +44,7 @@ export function parseMessage(line: string): IrcMessage {
   const message: IrcMessage = {
     command,
     params: parseParams(paramsSource),
-  }
-
-  if (tags) {
-    message.tags = tags
+    tags,
   }
 
   if (source !== undefined) {

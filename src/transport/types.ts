@@ -3,7 +3,7 @@ export type IrcTags = Record<string, string>
 // Canonical parsed protocol shape. This is the message format shared between
 // the transport loop and the higher-level runtime logic.
 export type IrcMessage = {
-  tags?: IrcTags
+  tags: IrcTags
   source?: string
   command: string
   params: string[]

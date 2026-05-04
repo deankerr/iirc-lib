@@ -50,7 +50,7 @@ describe('Runtime', () => {
     expect(runtime.connectionState.serverHost).toBe('irc.example.com')
   })
 
-test('parseSource marks the current nick as self', () => {
+  test('parseSource marks the current nick as self', () => {
     const transport = createMockTransport()
     const runtime = createRuntime(
       {
