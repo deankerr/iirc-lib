@@ -1,15 +1,8 @@
 import type { IrcMessage } from './types'
 
-const LINE_ENDING_REGEX = /\r?\n$/
-
-// Pure inbound processor: line text -> canonical IRC message.
-export function parseMessage(raw: string): IrcMessage {
-  const line = raw.replace(LINE_ENDING_REGEX, '')
-
-  if (line.length === 0 || line.trim().length === 0) {
-    throw new Error('Empty IRC message')
-  }
-
+// Pure inbound processor: clean IRC line -> canonical IrcMessage.
+// Caller guarantees the line has no \r\n and is non-empty.
+export function parseMessage(line: string): IrcMessage {
   let pos = 0
   let tags: Record<string, string> | undefined
   let source: string | undefined
@@ -64,28 +57,6 @@ export function parseMessage(raw: string): IrcMessage {
   return message
 }
 
-function parseTags(serialized: string): Record<string, string> {
-  const tags: Record<string, string> = {}
-
-  for (const part of serialized.split(';')) {
-    if (part.length === 0) {
-      continue
-    }
-
-    const equalsIndex = part.indexOf('=')
-    if (equalsIndex === -1) {
-      tags[part] = ''
-      continue
-    }
-
-    const key = part.slice(0, equalsIndex)
-    const value = part.slice(equalsIndex + 1)
-    tags[key] = unescapeTagValue(value)
-  }
-
-  return tags
-}
-
 function parseParams(serialized: string): string[] {
   if (serialized.length === 0) {
     return []
@@ -118,6 +89,28 @@ function parseParams(serialized: string): string[] {
   }
 
   return params
+}
+
+function parseTags(serialized: string): Record<string, string> {
+  const tags: Record<string, string> = {}
+
+  for (const part of serialized.split(';')) {
+    if (part.length === 0) {
+      continue
+    }
+
+    const equalsIndex = part.indexOf('=')
+    if (equalsIndex === -1) {
+      tags[part] = ''
+      continue
+    }
+
+    const key = part.slice(0, equalsIndex)
+    const value = part.slice(equalsIndex + 1)
+    tags[key] = unescapeTagValue(value)
+  }
+
+  return tags
 }
 
 function unescapeTagValue(value: string): string {

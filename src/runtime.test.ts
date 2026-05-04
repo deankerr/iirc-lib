@@ -4,7 +4,7 @@ import { createMockTransport } from './mock-transport'
 import { createRuntime } from './runtime'
 
 describe('Runtime', () => {
-  test('emits canonical parsed messages', () => {
+  test('emits parsed messages as events', () => {
     const transport = createMockTransport()
     const runtime = createRuntime(
       {
@@ -17,8 +17,8 @@ describe('Runtime', () => {
     runtime.register()
 
     const commands: string[] = []
-    runtime.on('message', (message) => {
-      commands.push(message.command)
+    runtime.on('event', (event) => {
+      commands.push(event.command)
     })
 
     transport.receive(':server NOTICE * :hello')

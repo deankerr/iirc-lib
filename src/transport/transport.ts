@@ -10,6 +10,7 @@ import type { IrcCommand, IrcMessage } from './types'
 export type TransportEvents = {
   read: [line: string]
   write: [line: string]
+  parse_error: [line: string, error: Error]
   message: [message: IrcMessage]
   close: []
   error: [error: Error]
@@ -81,7 +82,8 @@ export class Transport extends EventEmitter<TransportEvents> {
       let message: IrcMessage
       try {
         message = parseMessage(line)
-      } catch {
+      } catch (error) {
+        this.emit('parse_error', line, error instanceof Error ? error : new Error(String(error)))
         continue
       }
 

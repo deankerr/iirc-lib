@@ -20,10 +20,13 @@ type BuildEvents<T extends Record<string, (ctx: EnricherCtx) => object>> = {
   [K in keyof T & string]: Simplify<{ command: K } & ReturnType<T[K]> & EventBase>
 }[keyof T & string]
 
-export type IrcEvent = BuildEvents<typeof allEnrichers>
+// Fallback for commands with no enricher. Access the original command via raw.command.
+export type UnknownIrcEvent = Simplify<{ command: 'UNKNOWN' } & EventBase>
+
+export type IrcEvent = BuildEvents<typeof allEnrichers> | UnknownIrcEvent
 
 // Replaces manual Extract<IrcEvent, { command: T }> at call sites.
-export type IrcEventOf<T extends IrcEvent['command'] = keyof typeof allEnrichers> = Extract<
+export type IrcEventOf<T extends IrcEvent['command'] = IrcEvent['command']> = Extract<
   IrcEvent,
   { command: T }
 >
@@ -75,10 +78,10 @@ function hasEnricher(command: string): command is keyof typeof allEnrichers {
   return Object.hasOwn(allEnrichers, command)
 }
 
-export function buildEvent(message: IrcMessage, from: ParsedSource): IrcEvent | undefined {
+export function buildEvent(message: IrcMessage, from: ParsedSource): IrcEvent {
   const command = resolveCommand(message.command)
   if (!hasEnricher(command)) {
-    return undefined
+    return { command: 'UNKNOWN', from, raw: message }
   }
 
   const ctx = makeCtx(message.params)

@@ -41,8 +41,8 @@ const defaultRuntimeFeatures: RuntimeFeature[] = [
 
 export type RuntimeEvents = {
   register: [stream: Duplex]
-  message: [IrcMessage]
   event: [event: IrcEvent]
+  parse_error: [message: IrcMessage, error: Error]
   registered: []
   close: []
   error: [Error]
@@ -94,11 +94,14 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     this.transport = transport
 
     this.transport.on('message', (message) => {
-      this.emit('message', message)
-      const event = buildEvent(message, this.parseSource(message.source))
-      if (event !== undefined) {
-        this.emit('event', event)
+      let event: IrcEvent
+      try {
+        event = buildEvent(message, this.parseSource(message.source))
+      } catch (error) {
+        this.emit('parse_error', message, error instanceof Error ? error : new Error(String(error)))
+        return
       }
+      this.emit('event', event)
     })
     this.transport.on('close', () => {
       this.handleClose()
