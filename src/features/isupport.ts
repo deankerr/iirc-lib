@@ -200,12 +200,12 @@ export function isupport(runtime: Runtime): void {
     return result
   }
 
-  runtime.on('message', (message) => {
-    if (message.command !== runtime.numerics.RPL_ISUPPORT) {
+  runtime.on('event', (event) => {
+    if (event.command !== 'RPL_ISUPPORT') {
       return
     }
 
-    for (const token of message.params.slice(1, -1)) {
+    for (const token of event.tokens) {
       // Negation tokens remove a previously advertised parameter. The client
       // MUST revert to default behaviour. The token MUST NOT contain a value.
       if (token.startsWith('-')) {

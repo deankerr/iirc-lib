@@ -2,38 +2,34 @@ import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 
 import { CaseFoldMap } from './case-fold-map'
-import { resolveConfig } from './config'
 import type { RuntimeConfig, RuntimeInputConfig } from './config'
+import { resolveConfig } from './config'
+import type { IrcEvent } from './events'
+import { buildEvent } from './events'
 import type { Channel } from './features/channel-tracker'
 import { channelTracker } from './features/channel-tracker'
-import { clientEvents } from './features/client-events'
-import type { ClientEvent } from './features/client-events'
 import { identity } from './features/identity'
 import { IsupportMap, isupport } from './features/isupport'
 import { ping } from './features/ping'
 import { registration } from './features/registration'
-import { Numeric } from './numerics'
-import { Transport } from './transport'
 import type { IrcCommand, IrcMessage } from './transport'
+import { Transport } from './transport'
 
-export type RuntimeFeature = (runtime: Runtime) => void
+export type ModeChange = {
+  action: '+' | '-'
+  mode: string
+  argument?: string
+}
 
 // Features are applied in order. clientEvents must precede any feature that
 // subscribes to 'clientEvent', because EventEmitter delivers synchronously and
 // a subscriber that has not yet been registered will miss events.
-const defaultRuntimeFeatures: RuntimeFeature[] = [
-  registration,
-  ping,
-  identity,
-  isupport,
-  clientEvents,
-  channelTracker,
-]
+const defaultRuntimeFeatures = [registration, ping, identity, isupport, channelTracker]
 
 export type RuntimeEvents = {
   register: [stream: Duplex]
-  message: [IrcMessage]
-  clientEvent: [event: ClientEvent]
+  event: [event: IrcEvent]
+  parse_error: [message: IrcMessage, error: Error]
   registered: []
   close: []
   error: [Error]
@@ -44,7 +40,6 @@ export type ConnectionState = {
   realname: string
   registered: boolean
   nick: string
-  host?: string
   serverHost?: string
   serverVersion?: string
   account?: string
@@ -57,11 +52,7 @@ export type ParsedSource = {
   isSelf: boolean
 }
 
-const UNKNOWN_SOURCE: ParsedSource = { isSelf: false, name: '(unknown)' }
-
 export class Runtime extends EventEmitter<RuntimeEvents> {
-  readonly numerics = Numeric
-
   readonly config: RuntimeConfig
   readonly transport: Transport
 
@@ -84,10 +75,21 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
 
     this.transport = transport
 
-    this.transport.on('message', (message) => this.emit('message', message))
+    this.transport.on('message', (message) => {
+      let event: IrcEvent
+      try {
+        event = buildEvent(message, this.parseSource(message.source))
+      } catch (error) {
+        this.emit('parse_error', message, error instanceof Error ? error : new Error(String(error)))
+        return
+      }
+      this.emit('event', event)
+    })
+
     this.transport.on('close', () => {
       this.handleClose()
     })
+
     this.transport.on('error', (error) => {
       this.handleError(error)
     })
@@ -170,7 +172,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   // arbitrary string — name reflects that it might not be a nick.
   parseSource(source: string | undefined): ParsedSource {
     if (source === undefined || source.length === 0) {
-      return UNKNOWN_SOURCE
+      return { isSelf: false, name: this.connectionState.serverHost ?? '' }
     }
 
     const bangIndex = source.indexOf('!')
@@ -207,16 +209,68 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   private handleError(error: Error): void {
     this.emit('error', error)
   }
+
+  parseNames(names: string) {
+    return names
+      .split(' ')
+      .filter((name) => name.length > 0)
+      .map((name) => {
+        const mode = this.isupport.prefixToMode.get(name[0] ?? '')
+        if (mode === undefined) {
+          return { nick: name }
+        }
+
+        return { mode, nick: name.slice(1) }
+      })
+  }
+
+  // Parse a modestring and its trailing arguments into a flat list of changes.
+  // Argument consumption follows CHANMODES type groups and PREFIX from ISUPPORT.
+  // User mode letters are always type D (no argument) and fall through naturally.
+  parseModeChanges(modes: string, args: string[]): ModeChange[] {
+    const changes: ModeChange[] = []
+    let action: '+' | '-' = '+'
+    let argIndex = 0
+
+    const [typeA, typeB, typeC] = this.isupport.chanModeGroups
+    const { prefixModes } = this.isupport
+
+    for (const mode of modes) {
+      if (mode === '+' || mode === '-') {
+        action = mode
+        continue
+      }
+
+      // Prefix and type A/B modes always consume an argument.
+      if (prefixModes.includes(mode) || typeA.includes(mode) || typeB.includes(mode)) {
+        changes.push({ action, argument: args[argIndex] ?? '', mode })
+        argIndex += 1
+        continue
+      }
+
+      // Type C consumes an argument only when being set.
+      if (typeC.includes(mode)) {
+        if (action === '+') {
+          changes.push({ action, argument: args[argIndex] ?? '', mode })
+          argIndex += 1
+        } else {
+          changes.push({ action, mode })
+        }
+        continue
+      }
+
+      // Type D (and unknown/user modes) — no argument.
+      changes.push({ action, mode })
+    }
+
+    return changes
+  }
 }
 
 // Default session-construction path. Callers still register the session
 // explicitly so every runtime follows the same observable lifecycle.
-export function createRuntime(
-  input: RuntimeInputConfig,
-  stream: Duplex,
-  features = defaultRuntimeFeatures,
-): Runtime {
+export function createRuntime(input: RuntimeInputConfig, stream: Duplex): Runtime {
   const config = resolveConfig(input)
   const transport = new Transport(stream, { sendDelayMs: config.sendDelayMs })
-  return new Runtime(config, transport, features)
+  return new Runtime(config, transport)
 }

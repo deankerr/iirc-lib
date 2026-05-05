@@ -37,10 +37,7 @@ function toExpectedMessage(atoms: MessageAtoms): IrcMessage {
   const message: IrcMessage = {
     command: atoms.verb.toUpperCase(),
     params: atoms.params ?? [],
-  }
-
-  if (atoms.tags) {
-    message.tags = atoms.tags
+    tags: atoms.tags ?? {},
   }
 
   if (atoms.source !== undefined) {

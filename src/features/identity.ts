@@ -4,41 +4,26 @@ import type { Runtime } from '../runtime'
 //
 // Protocol ref: NICK, RPL_LOGGEDIN (900), RPL_LOGGEDOUT (901).
 //
-// State values read: runtime.connectionState.nick, runtime.numerics
+// State values read: runtime.connectionState.nick
 // State values set: runtime.connectionState (nick, account)
 
 export function identity(runtime: Runtime): void {
-  runtime.on('message', (message) => {
-    switch (message.command) {
-      case 'NICK': {
-        const source = runtime.parseSource(message.source)
-
-        if (!source.isSelf) {
-          break
-        }
-
-        const [nextNick] = message.params
-        if (nextNick === undefined || nextNick.length === 0) {
-          break
-        }
-
-        runtime.connectionState.nick = nextNick
-        break
+  runtime.on('event', (event) => {
+    if (event.command === 'NICK') {
+      if (!event.from.isSelf) {
+        return
       }
+      runtime.connectionState.nick = event.newnick
+      return
+    }
 
-      case runtime.numerics.RPL_LOGGEDIN: {
-        runtime.connectionState.account = message.params[2] ?? runtime.connectionState.account
-        break
-      }
+    if (event.command === 'RPL_LOGGEDIN') {
+      runtime.connectionState.account = event.account ?? runtime.connectionState.account
+      return
+    }
 
-      case runtime.numerics.RPL_LOGGEDOUT: {
-        runtime.connectionState.account = undefined
-        break
-      }
-
-      default: {
-        break
-      }
+    if (event.command === 'RPL_LOGGEDOUT') {
+      runtime.connectionState.account = undefined
     }
   })
 }

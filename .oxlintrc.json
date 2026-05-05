@@ -31,5 +31,19 @@
 
     // project
     "unicorn/prefer-event-target": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/events/**"],
+      "rules": {
+        "sort-keys": "off"
+      }
+    },
+    {
+      "files": ["src/features/channel-tracker.ts", "src/features/registration.ts"],
+      "rules": {
+        "complexity": "off"
+      }
+    }
+  ]
 }

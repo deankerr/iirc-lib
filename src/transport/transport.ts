@@ -10,6 +10,7 @@ import type { IrcCommand, IrcMessage } from './types'
 export type TransportEvents = {
   read: [line: string]
   write: [line: string]
+  parse_error: [line: string, error: Error]
   message: [message: IrcMessage]
   close: []
   error: [error: Error]
@@ -67,7 +68,15 @@ export class Transport extends EventEmitter<TransportEvents> {
   }
 
   private handleChunk(chunk: string): void {
-    const lines = this.inputBuffer.push(chunk)
+    const { lines, overflowExcerpt } = this.inputBuffer.push(chunk)
+
+    if (overflowExcerpt !== undefined) {
+      this.emit(
+        'parse_error',
+        overflowExcerpt,
+        new Error('IRC line exceeded maximum length and was discarded'),
+      )
+    }
 
     for (const line of lines) {
       if (line.length === 0) {
@@ -81,7 +90,8 @@ export class Transport extends EventEmitter<TransportEvents> {
       let message: IrcMessage
       try {
         message = parseMessage(line)
-      } catch {
+      } catch (error) {
+        this.emit('parse_error', line, error instanceof Error ? error : new Error(String(error)))
         continue
       }
 

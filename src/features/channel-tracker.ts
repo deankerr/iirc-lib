@@ -1,6 +1,5 @@
 import { CaseFoldMap } from '../case-fold-map'
 import type { Runtime } from '../runtime'
-import type { ClientEvent, ClientModeChange } from './client-events'
 
 export type ChannelTopic = {
   text: string
@@ -9,17 +8,17 @@ export type ChannelTopic = {
 }
 
 export type ChannelMember = {
-  modes: Set<string>
   nick: string
 }
-
-export type ChannelModeValue = string | true
 
 export type ChannelState = Channel
 
 export class Channel {
   readonly members: CaseFoldMap<ChannelMember>
-  readonly modes = new Map<string, ChannelModeValue>()
+  // Each mode letter maps to the set of arguments associated with it.
+  // Boolean modes (type D) use an empty set; list modes (type A) and prefix
+  // modes accumulate entries; setting modes (type B/C) hold a single entry.
+  readonly modes = new Map<string, Set<string>>()
   readonly name: string
 
   joined = false
@@ -31,214 +30,259 @@ export class Channel {
     this.name = name
   }
 
-  // Apply a mode change list to this channel, ignoring user-mode changes.
-  applyChanges(changes: ClientModeChange[]): void {
-    for (const change of changes) {
-      if (change.appliesTo === 'user') {
-        continue
+  addMode(mode: string, argument?: string): void {
+    if (argument === undefined) {
+      if (!this.modes.has(mode)) {
+        this.modes.set(mode, new Set())
       }
+      return
+    }
 
-      if (change.appliesTo === 'channel') {
-        if (change.action === 'add') {
-          this.modes.set(change.mode, change.argument ?? true)
-          continue
-        }
+    let args = this.modes.get(mode)
+    if (args === undefined) {
+      args = new Set()
+      this.modes.set(mode, args)
+    }
+    args.add(argument)
+  }
 
-        this.modes.delete(change.mode)
-        continue
+  removeMode(mode: string, argument?: string): void {
+    if (argument === undefined) {
+      this.modes.delete(mode)
+      return
+    }
+
+    const args = this.modes.get(mode)
+    if (args !== undefined) {
+      args.delete(argument)
+      if (args.size === 0) {
+        this.modes.delete(mode)
       }
-
-      if (change.argument === undefined) {
-        continue
-      }
-
-      const member = this.addMember(change.argument)
-      if (change.action === 'add') {
-        member.modes.add(change.mode)
-        continue
-      }
-
-      member.modes.delete(change.mode)
     }
   }
 
-  // Server query results are allowed to replace member state when the feature
-  // layer has assembled a complete logical names response.
-  setMembers(members: ChannelMember[]): void {
-    this.members.clear()
-
-    for (const member of members) {
-      this.members.set(member.nick, member)
+  // Returns the set of mode letters this nick holds as an argument (prefix modes).
+  // Scans all mode entries; fine given the small number of active mode letters.
+  getMemberModes(nick: string): Set<string> {
+    const result = new Set<string>()
+    for (const [mode, args] of this.modes) {
+      if (args.has(nick)) {
+        result.add(mode)
+      }
     }
+    return result
   }
 
-  addMember(nick: string): ChannelMember {
-    return this.members.ensure(nick, () => ({ modes: new Set<string>(), nick }))
+  addMember(nick: string): void {
+    this.members.ensure(nick, () => ({ nick }))
   }
 
   removeMember(nick: string): void {
     this.members.delete(nick)
+    // Clean up any prefix mode entries for this nick.
+    for (const args of this.modes.values()) {
+      args.delete(nick)
+    }
   }
 
   renameMember(previousNick: string, nick: string): void {
-    const member = this.members.get(previousNick)
-    if (member === undefined) {
+    if (!this.members.has(previousNick)) {
       return
     }
 
     this.members.delete(previousNick)
-    member.nick = nick
-    this.members.set(nick, member)
+    this.members.set(nick, { nick })
+
+    // Update the nick in any mode argument sets (covers prefix modes).
+    for (const args of this.modes.values()) {
+      if (args.has(previousNick)) {
+        args.delete(previousNick)
+        args.add(nick)
+      }
+    }
   }
 }
 
-type HandlerEvent<T extends string> = Extract<ClientEvent, { command: T }>
-
-// Channel state mutation handlers. Each key matches a ClientEvent command and
-// receives its specific event variant — no command guards needed inside. The map
-// lookup replaces both the router switch and Channel.apply: no double-dispatch.
-const channelHandlers = {
-  JOIN(channel: Channel, event: HandlerEvent<'JOIN'>) {
-    if (event.from.isSelf) {
-      channel.joined = true
-    }
-
-    channel.addMember(event.from.name)
-  },
-
-  PART(channel: Channel, event: HandlerEvent<'PART'>) {
-    if (event.from.isSelf) {
-      channel.joined = false
-    }
-
-    channel.removeMember(event.from.name)
-  },
-
-  QUIT(channel: Channel, event: HandlerEvent<'QUIT'>) {
-    if (event.from.isSelf) {
-      channel.joined = false
-    }
-
-    channel.removeMember(event.from.name)
-  },
-
-  KILL(channel: Channel, event: HandlerEvent<'KILL'>) {
-    if (event.from.isSelf) {
-      channel.joined = false
-    }
-
-    channel.removeMember(event.from.name)
-  },
-
-  NICK(channel: Channel, event: HandlerEvent<'NICK'>) {
-    channel.renameMember(event.from.name, event.nick)
-  },
-
-  KICK(channel: Channel, event: HandlerEvent<'KICK'>) {
-    if (event.nickIsSelf) {
-      channel.joined = false
-    }
-
-    channel.removeMember(event.nick)
-  },
-
-  TOPIC(channel: Channel, event: HandlerEvent<'TOPIC'>) {
-    if (event.text === '') {
-      channel.topic = undefined
-      return
-    }
-
-    channel.topic = {
-      ...channel.topic,
-      setAt: String(Date.now() / 1000),
-      setBy: event.from.name,
-      text: event.text,
-    }
-  },
-
-  RPL_TOPIC(channel: Channel, event: HandlerEvent<'RPL_TOPIC'>) {
-    channel.topic = {
-      ...channel.topic,
-      text: event.text,
-    }
-  },
-
-  RPL_TOPICWHOTIME(channel: Channel, event: HandlerEvent<'RPL_TOPICWHOTIME'>) {
-    channel.topic = {
-      setAt: event.setAt,
-      setBy: event.nick,
-      text: channel.topic?.text ?? '',
-    }
-  },
-
-  RPL_NOTOPIC() {
-    // RPL_NOTOPIC is the server's explicit response when querying a channel
-    // that has no topic set. Live clearing is handled by TOPIC with empty text.
-  },
-
-  RPL_CHANNELMODEIS(channel: Channel, event: HandlerEvent<'RPL_CHANNELMODEIS'>) {
-    channel.applyChanges(event.changes)
-  },
-
-  MODE(channel: Channel, event: HandlerEvent<'MODE'>) {
-    channel.applyChanges(event.changes)
-  },
-
-  RPL_CREATIONTIME(channel: Channel, event: HandlerEvent<'RPL_CREATIONTIME'>) {
-    channel.createdAt = event.setAt
-  },
-}
-
-type ChannelHandler = (channel: Channel, event: ClientEvent) => void
-
 export function channelTracker(runtime: Runtime): void {
-  const pendingNames = new CaseFoldMap<ChannelMember[]>((name) => runtime.caseFold(name))
+  const pendingNames = new CaseFoldMap<{ nick: string; mode?: string }[]>((name) =>
+    runtime.caseFold(name),
+  )
   const ensureChannel = (name: string) =>
     runtime.channels.ensure(name, () => new Channel(name, (key) => runtime.caseFold(key)))
 
-  // The handler key matches the event command by construction — each handler
-  // receives its specific event variant. TypeScript cannot verify this
-  // correlation at the call site, so we cast once at the dispatch point.
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  const handlers = channelHandlers as unknown as Record<string, ChannelHandler>
-
-  runtime.on('clientEvent', (event) => {
-    // NAMES accumulation is a tracker concern, not a channel mutation.
+  runtime.on('event', (event) => {
     if (event.command === 'RPL_NAMREPLY') {
-      ensureChannel(event.target)
-      for (const entry of event.members) {
-        const modes = new Set<string>()
-        if (entry.mode !== undefined) {
-          modes.add(entry.mode)
-        }
+      ensureChannel(event.channel)
 
-        pendingNames.ensure(event.target, () => []).push({ modes, nick: entry.nick })
+      for (const entry of runtime.parseNames(event.names)) {
+        pendingNames.ensure(event.channel, () => []).push(entry)
       }
 
       return
     }
 
     if (event.command === 'RPL_ENDOFNAMES') {
+      const channel = ensureChannel(event.channel)
+      const pending = pendingNames.get(event.channel) ?? []
+
+      // Replace members and their prefix modes atomically.
+      channel.members.clear()
+      for (const prefixMode of runtime.isupport.prefixModes) {
+        channel.modes.delete(prefixMode)
+      }
+
+      for (const { nick, mode } of pending) {
+        channel.addMember(nick)
+        if (mode !== undefined) {
+          channel.addMode(mode, nick)
+        }
+      }
+
+      pendingNames.delete(event.channel)
+      return
+    }
+
+    if (event.command === 'MODE') {
+      if (!runtime.isChannel(event.target)) {
+        return
+      }
       const channel = ensureChannel(event.target)
-      channel.setMembers(pendingNames.get(event.target) ?? [])
-      pendingNames.delete(event.target)
+      const [, typeB] = runtime.isupport.chanModeGroups
+      for (const change of runtime.parseModeChanges(event.modestring, event.modeArgs)) {
+        if (change.action === '+') {
+          channel.addMode(change.mode, change.argument)
+        } else if (typeB.includes(change.mode)) {
+          // Type B remove argument is a protocol artifact — always clear the whole setting.
+          channel.removeMode(change.mode)
+        } else {
+          channel.removeMode(change.mode, change.argument)
+        }
+      }
       return
     }
 
-    const handler = handlers[event.command]
-    if (handler === undefined) {
+    if (event.command === 'RPL_CHANNELMODEIS') {
+      const channel = ensureChannel(event.channel)
+      const [, typeB] = runtime.isupport.chanModeGroups
+      for (const change of runtime.parseModeChanges(event.modestring, event.modeArgs)) {
+        if (change.action === '+') {
+          channel.addMode(change.mode, change.argument)
+        } else if (typeB.includes(change.mode)) {
+          channel.removeMode(change.mode)
+        } else {
+          channel.removeMode(change.mode, change.argument)
+        }
+      }
       return
     }
 
-    // Targeted events mutate a single channel.
-    if ('target' in event && typeof event.target === 'string') {
-      handler(ensureChannel(event.target), event)
+    if (event.command === 'JOIN') {
+      const channel = ensureChannel(event.channel)
+      if (event.from.isSelf) {
+        channel.joined = true
+      }
+
+      channel.addMember(event.from.name)
       return
     }
 
-    // Broadcast events mutate every tracked channel.
-    for (const channel of runtime.channels.values()) {
-      handler(channel, event)
+    if (event.command === 'PART') {
+      const channel = ensureChannel(event.channel)
+      if (event.from.isSelf) {
+        channel.joined = false
+      }
+
+      channel.removeMember(event.from.name)
+      return
+    }
+
+    if (event.command === 'TOPIC') {
+      const channel = ensureChannel(event.channel)
+      if (event.topic === '') {
+        channel.topic = undefined
+        return
+      }
+
+      channel.topic = {
+        ...channel.topic,
+        setAt: String(Date.now() / 1000),
+        setBy: event.from.name,
+        text: event.topic,
+      }
+      return
+    }
+
+    if (event.command === 'RPL_NOTOPIC') {
+      const channel = ensureChannel(event.channel)
+      channel.topic = undefined
+      return
+    }
+
+    if (event.command === 'RPL_TOPIC') {
+      const channel = ensureChannel(event.channel)
+      channel.topic = {
+        ...channel.topic,
+        text: event.topic,
+      }
+      return
+    }
+
+    if (event.command === 'RPL_TOPICWHOTIME') {
+      const channel = ensureChannel(event.channel)
+      channel.topic = {
+        setAt: event.setat,
+        setBy: event.nick,
+        text: channel.topic?.text ?? '',
+      }
+      return
+    }
+
+    if (event.command === 'RPL_CREATIONTIME') {
+      const channel = ensureChannel(event.channel)
+      channel.createdAt = event.creationtime
+      return
+    }
+
+    if (event.command === 'KICK') {
+      const channel = ensureChannel(event.channel)
+      channel.removeMember(event.user)
+
+      if (runtime.sameIdentifier(event.user, runtime.connectionState.nick)) {
+        channel.joined = false
+      }
+      return
+    }
+
+    if (event.command === 'QUIT') {
+      if (event.from.isSelf) {
+        for (const channel of runtime.channels.values()) {
+          channel.joined = false
+        }
+      }
+
+      for (const channel of runtime.channels.values()) {
+        channel.removeMember(event.from.name)
+      }
+      return
+    }
+
+    if (event.command === 'KILL') {
+      if (runtime.sameIdentifier(event.nickname, runtime.connectionState.nick)) {
+        for (const channel of runtime.channels.values()) {
+          channel.joined = false
+        }
+      }
+
+      for (const channel of runtime.channels.values()) {
+        channel.removeMember(event.nickname)
+      }
+      return
+    }
+
+    if (event.command === 'NICK') {
+      for (const channel of runtime.channels.values()) {
+        channel.renameMember(event.from.name, event.newnick)
+      }
     }
   })
 }

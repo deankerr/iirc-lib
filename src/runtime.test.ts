@@ -4,7 +4,7 @@ import { createMockTransport } from './mock-transport'
 import { createRuntime } from './runtime'
 
 describe('Runtime', () => {
-  test('emits canonical parsed messages', () => {
+  test('emits parsed messages as events', () => {
     const transport = createMockTransport()
     const runtime = createRuntime(
       {
@@ -17,8 +17,8 @@ describe('Runtime', () => {
     runtime.register()
 
     const commands: string[] = []
-    runtime.on('message', (message) => {
-      commands.push(message.command)
+    runtime.on('event', (event) => {
+      commands.push(event.command)
     })
 
     transport.receive(':server NOTICE * :hello')
@@ -48,27 +48,6 @@ describe('Runtime', () => {
     expect(registered).toBe(true)
     expect(runtime.connectionState.registered).toBe(true)
     expect(runtime.connectionState.serverHost).toBe('irc.example.com')
-  })
-
-  test('reads self user and host from welcome text when present', () => {
-    const transport = createMockTransport()
-    const runtime = createRuntime(
-      {
-        nick: 'bot',
-        sendDelayMs: 0,
-      },
-      transport.stream,
-    )
-
-    runtime.register()
-
-    transport.receive(
-      ':irc.example.com 001 actualbot :Welcome to the network actualbot!~user@cloak.example',
-    )
-
-    expect(runtime.connectionState.nick).toBe('actualbot')
-    expect(runtime.connectionState.user).toBe('~user')
-    expect(runtime.connectionState.host).toBe('cloak.example')
   })
 
   test('parseSource marks the current nick as self', () => {
