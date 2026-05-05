@@ -15,14 +15,8 @@ import { registration } from './features/registration'
 import type { IrcCommand, IrcMessage } from './transport'
 import { Transport } from './transport'
 
-export type RuntimeFeature = (runtime: Runtime) => void
-
-export type ClientModeChangeAction = 'add' | 'remove'
-export type ClientModeChangeAppliesTo = 'channel' | 'member' | 'user'
-
-export type ClientModeChange = {
-  action: ClientModeChangeAction
-  appliesTo: ClientModeChangeAppliesTo
+export type ModeChange = {
+  action: '+' | '-'
   mode: string
   argument?: string
 }
@@ -30,13 +24,7 @@ export type ClientModeChange = {
 // Features are applied in order. clientEvents must precede any feature that
 // subscribes to 'clientEvent', because EventEmitter delivers synchronously and
 // a subscriber that has not yet been registered will miss events.
-const defaultRuntimeFeatures: RuntimeFeature[] = [
-  registration,
-  ping,
-  identity,
-  isupport,
-  channelTracker,
-]
+const defaultRuntimeFeatures = [registration, ping, identity, isupport, channelTracker]
 
 export type RuntimeEvents = {
   register: [stream: Duplex]
@@ -236,59 +224,43 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
       })
   }
 
-  parseModeChanges(target: string, modes: string, args: string[]): ClientModeChange[] {
-    const changes: ClientModeChange[] = []
-    let action: ClientModeChangeAction = 'add'
+  // Parse a modestring and its trailing arguments into a flat list of changes.
+  // Argument consumption follows CHANMODES type groups and PREFIX from ISUPPORT.
+  // User mode letters are always type D (no argument) and fall through naturally.
+  parseModeChanges(modes: string, args: string[]): ModeChange[] {
+    const changes: ModeChange[] = []
+    let action: '+' | '-' = '+'
     let argIndex = 0
 
-    const isChannel = this.isupport.isChannel(target)
     const [typeA, typeB, typeC] = this.isupport.chanModeGroups
     const { prefixModes } = this.isupport
 
     for (const mode of modes) {
-      if (mode === '+') {
-        action = 'add'
+      if (mode === '+' || mode === '-') {
+        action = mode
         continue
       }
 
-      if (mode === '-') {
-        action = 'remove'
-        continue
-      }
-
-      // User mode — target is not a channel.
-      if (!isChannel) {
-        changes.push({ action, appliesTo: 'user', mode })
-        continue
-      }
-
-      // Prefix mode (o, v, etc.) — always a member mode, always takes argument.
-      if (prefixModes.includes(mode)) {
-        changes.push({ action, appliesTo: 'member', argument: args[argIndex] ?? '', mode })
+      // Prefix and type A/B modes always consume an argument.
+      if (prefixModes.includes(mode) || typeA.includes(mode) || typeB.includes(mode)) {
+        changes.push({ action, argument: args[argIndex] ?? '', mode })
         argIndex += 1
         continue
       }
 
-      // Channel mode type A or B — always takes argument.
-      if (typeA.includes(mode) || typeB.includes(mode)) {
-        changes.push({ action, appliesTo: 'channel', argument: args[argIndex] ?? '', mode })
-        argIndex += 1
-        continue
-      }
-
-      // Channel mode type C — argument only when adding.
+      // Type C consumes an argument only when being set.
       if (typeC.includes(mode)) {
-        if (action === 'add') {
-          changes.push({ action, appliesTo: 'channel', argument: args[argIndex] ?? '', mode })
+        if (action === '+') {
+          changes.push({ action, argument: args[argIndex] ?? '', mode })
           argIndex += 1
         } else {
-          changes.push({ action, appliesTo: 'channel', mode })
+          changes.push({ action, mode })
         }
         continue
       }
 
-      // Channel mode type D — never takes argument.
-      changes.push({ action, appliesTo: 'channel', mode })
+      // Type D (and unknown/user modes) — no argument.
+      changes.push({ action, mode })
     }
 
     return changes

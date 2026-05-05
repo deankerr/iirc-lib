@@ -25,7 +25,6 @@ export type UnknownIrcEvent = Simplify<{ command: 'UNKNOWN' } & EventBase>
 
 export type IrcEvent = BuildEvents<typeof allEnrichers> | UnknownIrcEvent
 
-// Replaces manual Extract<IrcEvent, { command: T }> at call sites.
 export type IrcEventOf<T extends IrcEvent['command'] = IrcEvent['command']> = Extract<
   IrcEvent,
   { command: T }

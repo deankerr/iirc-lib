@@ -6,7 +6,7 @@ import { FileSinkLogger } from './file-sink-logger'
 const HOST = 'localhost'
 const PORT = 6667
 const NICK = 'iirc-demo'
-const CHANNEL = '#dev'
+const CHANNELS = ['#dev', '#dev2']
 
 // Attach the runtime to a local IRC server and print the enriched client event
 // stream. This intentionally has no flags: it is a small live-shape probe.
@@ -23,12 +23,8 @@ runtime.transport.on('write', (line) => {
 })
 
 runtime.on('registered', () => {
-  runtime.send('JOIN', CHANNEL)
-})
-
-runtime.on('event', (event) => {
-  if (event.command === 'JOIN' && event.from.isSelf) {
-    runtime.send('PRIVMSG', CHANNEL, '')
+  for (const channel of CHANNELS) {
+    runtime.send('JOIN', channel)
   }
 })
 

@@ -59,6 +59,7 @@ export const numericsMap = {
   '353': 'RPL_NAMREPLY',
   '364': 'RPL_LINKS',
   '365': 'RPL_ENDOFLINKS',
+  '366': 'RPL_ENDOFNAMES',
   '367': 'RPL_BANLIST',
   '368': 'RPL_ENDOFBANLIST',
   '369': 'RPL_ENDOFWHOWAS',
