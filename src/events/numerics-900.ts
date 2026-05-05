@@ -2,8 +2,8 @@ import type { EnricherCtx } from './types'
 
 export const numerics900 = {
   // params: <client> <nick>!<user>@<host> <account> :You are now logged in as <username>
-  RPL_LOGGEDIN: ({ req, rest }: EnricherCtx) => {
-    const client = req()
+  RPL_LOGGEDIN: ({ param, rest }: EnricherCtx) => {
+    const client = param()
     const r = rest()
     return {
       client,
@@ -14,52 +14,52 @@ export const numerics900 = {
   },
 
   // params: <client> <nick>!<user>@<host> :You are now logged out
-  RPL_LOGGEDOUT: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nickUserHost: req(),
-    text: req(),
+  RPL_LOGGEDOUT: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nickUserHost: param(),
+    text: trailing(),
   }),
 
   // params: <client> :You must use a nick assigned to you
-  ERR_NICKLOCKED: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_NICKLOCKED: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :SASL authentication successful
-  RPL_SASLSUCCESS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_SASLSUCCESS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :SASL authentication failed
-  ERR_SASLFAIL: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_SASLFAIL: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :SASL message too long
-  ERR_SASLTOOLONG: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_SASLTOOLONG: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :SASL authentication aborted
-  ERR_SASLABORTED: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_SASLABORTED: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :You have already authenticated using SASL
-  ERR_SASLALREADY: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_SASLALREADY: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <mechanisms> :are available SASL mechanisms
-  RPL_SASLMECHS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    mechanisms: req(),
-    text: req(),
+  RPL_SASLMECHS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    mechanisms: param(),
+    text: trailing(),
   }),
 }

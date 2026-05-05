@@ -2,36 +2,36 @@ import type { EnricherCtx } from './types'
 
 export const numerics000 = {
   // params: <client> :<text>
-  RPL_WELCOME: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_WELCOME: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :<text>
-  RPL_YOURHOST: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_YOURHOST: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :<text>
-  RPL_CREATED: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_CREATED: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <servername> <version> <available user modes> <available channel modes> [<channel modes with a parameter>]
-  RPL_MYINFO: ({ req, opt }: EnricherCtx) => ({
-    client: req(),
-    servername: req(),
-    version: req(),
-    availableUserModes: req(),
-    availableChanModes: req(),
-    chanModesWithParam: opt(),
+  RPL_MYINFO: ({ param, optional }: EnricherCtx) => ({
+    client: param(),
+    servername: param(),
+    version: param(),
+    availableUserModes: param(),
+    availableChanModes: param(),
+    chanModesWithParam: optional(),
   }),
 
   // params: <client> <1-13 tokens> :are supported by this server
-  RPL_ISUPPORT: ({ req, rest }: EnricherCtx) => {
-    const client = req()
+  RPL_ISUPPORT: ({ param, rest }: EnricherCtx) => {
+    const client = param()
     const r = rest()
     return {
       client,
@@ -41,10 +41,10 @@ export const numerics000 = {
   },
 
   // params: <client> <hostname> <port> :<info>
-  RPL_BOUNCE: ({ req }: EnricherCtx) => ({
-    client: req(),
-    hostname: req(),
-    port: req(),
-    info: req(),
+  RPL_BOUNCE: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    hostname: param(),
+    port: param(),
+    info: trailing(),
   }),
 }

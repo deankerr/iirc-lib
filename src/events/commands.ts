@@ -1,88 +1,89 @@
 import type { EnricherCtx } from './types'
 
 export const commandEnrichers = {
-  // params: <target> <text>
-  PRIVMSG: ({ req }: EnricherCtx) => ({
-    target: req(),
-    text: req(),
+  // params: <target> :<text>
+  PRIVMSG: ({ param, trailing }: EnricherCtx) => ({
+    target: param(),
+    text: trailing(),
   }),
 
-  // params: <target> <text>
-  NOTICE: ({ req }: EnricherCtx) => ({
-    target: req(),
-    text: req(),
+  // params: <target> :<text>
+  NOTICE: ({ param, trailing }: EnricherCtx) => ({
+    target: param(),
+    text: trailing(),
   }),
 
-  // params: <channel> <topic>
-  TOPIC: ({ req, str }: EnricherCtx) => ({
-    channel: req(),
-    topic: str(),
+  // params: <channel> :<topic>
+  TOPIC: ({ param, trailing }: EnricherCtx) => ({
+    channel: param(),
+    topic: trailing(),
   }),
 
-  // params: <token>
-  PING: ({ req }: EnricherCtx) => ({
-    token: req(),
+  // params: :<token>
+  PING: ({ trailing }: EnricherCtx) => ({
+    token: trailing(),
   }),
 
-  // params: <server> [<token>]
-  PONG: ({ req, opt }: EnricherCtx) => ({
-    server: req(),
-    token: opt(),
+  // params: <server> [:<token>]
+  PONG: ({ param, optional }: EnricherCtx) => ({
+    server: param(),
+    token: optional(),
   }),
 
-  // params: <reason>
-  ERROR: ({ req }: EnricherCtx) => ({
-    reason: req(),
+  // params: :<reason>
+  ERROR: ({ trailing }: EnricherCtx) => ({
+    reason: trailing(),
   }),
 
   // params: <target> <modestring> [<mode arguments>...]
-  MODE: ({ req, rest }: EnricherCtx) => ({
-    target: req(),
-    modestring: req(),
+  MODE: ({ param, rest }: EnricherCtx) => ({
+    target: param(),
+    modestring: param(),
     modeArgs: rest(),
   }),
 
-  // params: <nickname> <comment>
-  KILL: ({ req }: EnricherCtx) => ({
-    nickname: req(),
-    comment: req(),
+  // params: <nickname> :<comment>
+  KILL: ({ param, trailing }: EnricherCtx) => ({
+    nickname: param(),
+    comment: trailing(),
   }),
 
-  // params: <message>
-  WALLOPS: ({ req }: EnricherCtx) => ({
-    message: req(),
+  // params: :<message>
+  WALLOPS: ({ trailing }: EnricherCtx) => ({
+    message: trailing(),
   }),
 
   // params: <channel>
-  JOIN: ({ req }: EnricherCtx) => ({
-    channel: req(),
+  JOIN: ({ param }: EnricherCtx) => ({
+    channel: param(),
   }),
 
-  // params: <channel> [<reason>]
-  PART: ({ req, opt }: EnricherCtx) => ({
-    channel: req(),
-    reason: opt(),
+  // params: <channel> [:<reason>]
+  PART: ({ param, optional }: EnricherCtx) => ({
+    channel: param(),
+    reason: optional(),
   }),
 
-  // params: [<reason>]
-  QUIT: ({ opt }: EnricherCtx) => ({
-    reason: opt(),
+  // params: [:<reason>]
+  QUIT: ({ optional }: EnricherCtx) => ({
+    reason: optional(),
   }),
 
   // params: <newnick>
-  NICK: ({ req }: EnricherCtx) => ({
-    newnick: req(),
+  NICK: ({ param }: EnricherCtx) => ({
+    newnick: param(),
   }),
 
-  KICK: ({ req, opt }: EnricherCtx) => ({
-    channel: req(),
-    user: req(),
-    comment: opt(),
+  // params: <channel> <user> [:<comment>]
+  KICK: ({ param, optional }: EnricherCtx) => ({
+    channel: param(),
+    user: param(),
+    comment: optional(),
   }),
 
   // params: <nickname> <channel>
-  INVITE: ({ req }: EnricherCtx) => ({
-    nickname: req(),
-    channel: req(),
+  INVITE: ({ param }: EnricherCtx) => ({
+    nickname: param(),
+    channel: param(),
   }),
 }

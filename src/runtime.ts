@@ -12,7 +12,6 @@ import { identity } from './features/identity'
 import { IsupportMap, isupport } from './features/isupport'
 import { ping } from './features/ping'
 import { registration } from './features/registration'
-import { Numeric } from './numerics'
 import type { IrcCommand, IrcMessage } from './transport'
 import { Transport } from './transport'
 
@@ -53,7 +52,6 @@ export type ConnectionState = {
   realname: string
   registered: boolean
   nick: string
-  host?: string
   serverHost?: string
   serverVersion?: string
   account?: string
@@ -66,11 +64,7 @@ export type ParsedSource = {
   isSelf: boolean
 }
 
-
-
 export class Runtime extends EventEmitter<RuntimeEvents> {
-  readonly numerics = Numeric
-
   readonly config: RuntimeConfig
   readonly transport: Transport
 
@@ -303,12 +297,8 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
 
 // Default session-construction path. Callers still register the session
 // explicitly so every runtime follows the same observable lifecycle.
-export function createRuntime(
-  input: RuntimeInputConfig,
-  stream: Duplex,
-  features = defaultRuntimeFeatures,
-): Runtime {
+export function createRuntime(input: RuntimeInputConfig, stream: Duplex): Runtime {
   const config = resolveConfig(input)
   const transport = new Transport(stream, { sendDelayMs: config.sendDelayMs })
-  return new Runtime(config, transport, features)
+  return new Runtime(config, transport)
 }

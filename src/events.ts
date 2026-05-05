@@ -34,15 +34,15 @@ export type IrcEventOf<T extends IrcEvent['command'] = IrcEvent['command']> = Ex
 function makeCtx(params: string[]): EnricherCtx {
   let i = 0
   return {
-    opt: () => {
+    optional: () => {
       const v = params[i]
       i += 1
       return v
     },
-    req: () => {
+    param: () => {
       const v = params[i]
       i += 1
-      if (v === undefined || v === '') {
+      if (v === undefined) {
         throw new Error(`irc: required param missing at index ${i - 1}`)
       }
       return v
@@ -52,11 +52,11 @@ function makeCtx(params: string[]): EnricherCtx {
       i = params.length
       return v
     },
-    str: () => {
+    trailing: () => {
       const v = params[i]
       i += 1
       if (v === undefined) {
-        throw new Error(`irc: required param missing at index ${i - 1}`)
+        throw new Error(`irc: trailing param missing at index ${i - 1}`)
       }
       return v
     },

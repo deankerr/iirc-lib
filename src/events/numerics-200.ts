@@ -2,10 +2,10 @@ import type { EnricherCtx } from './types'
 
 export const numerics200 = {
   // params: <client> <command> <count> [<byte count> <remote count>]
-  RPL_STATSCOMMANDS: ({ req, rest }: EnricherCtx) => {
-    const client = req()
-    const command = req()
-    const count = req()
+  RPL_STATSCOMMANDS: ({ param, rest }: EnricherCtx) => {
+    const client = param()
+    const command = param()
+    const count = param()
     const r = rest()
     return {
       client,
@@ -17,60 +17,60 @@ export const numerics200 = {
   },
 
   // params: <client> <stats letter> :End of /STATS report
-  RPL_ENDOFSTATS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    statsLetter: req(),
-    text: req(),
+  RPL_ENDOFSTATS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    statsLetter: param(),
+    text: trailing(),
   }),
 
   // params: <client> <user modes>
-  RPL_UMODEIS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    userModes: req(),
+  RPL_UMODEIS: ({ param }: EnricherCtx) => ({
+    client: param(),
+    userModes: param(),
   }),
 
   // params: <client> :Server Up <days> days <hours>:<minutes>:<seconds>
-  RPL_STATSUPTIME: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_STATSUPTIME: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :There are <u> users and <i> invisible on <s> servers
-  RPL_LUSERCLIENT: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_LUSERCLIENT: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <ops> :operator(s) online
-  RPL_LUSEROP: ({ req }: EnricherCtx) => ({
-    client: req(),
-    ops: req(),
-    text: req(),
+  RPL_LUSEROP: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    ops: param(),
+    text: trailing(),
   }),
 
   // params: <client> <connections> :unknown connection(s)
-  RPL_LUSERUNKNOWN: ({ req }: EnricherCtx) => ({
-    client: req(),
-    connections: req(),
-    text: req(),
+  RPL_LUSERUNKNOWN: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    connections: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channels> :channels formed
-  RPL_LUSERCHANNELS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channels: req(),
-    text: req(),
+  RPL_LUSERCHANNELS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channels: param(),
+    text: trailing(),
   }),
 
   // params: <client> :I have <c> clients and <s> servers
-  RPL_LUSERME: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_LUSERME: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> [<server>] :Administrative info
-  RPL_ADMINME: ({ req, rest }: EnricherCtx) => {
-    const client = req()
+  RPL_ADMINME: ({ param, rest }: EnricherCtx) => {
+    const client = param()
     const r = rest()
     return {
       client,
@@ -80,33 +80,33 @@ export const numerics200 = {
   },
 
   // params: <client> :<info>
-  RPL_ADMINLOC1: ({ req }: EnricherCtx) => ({
-    client: req(),
-    info: req(),
+  RPL_ADMINLOC1: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    info: trailing(),
   }),
 
   // params: <client> :<info>
-  RPL_ADMINLOC2: ({ req }: EnricherCtx) => ({
-    client: req(),
-    info: req(),
+  RPL_ADMINLOC2: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    info: trailing(),
   }),
 
   // params: <client> :<info>
-  RPL_ADMINEMAIL: ({ req }: EnricherCtx) => ({
-    client: req(),
-    info: req(),
+  RPL_ADMINEMAIL: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    info: trailing(),
   }),
 
   // params: <client> <command> :Please wait a while and try again.
-  RPL_TRYAGAIN: ({ req }: EnricherCtx) => ({
-    client: req(),
-    command: req(),
-    text: req(),
+  RPL_TRYAGAIN: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    command: param(),
+    text: trailing(),
   }),
 
   // params: <client> [<u> <m>] :Current local users <u>, max <m>
-  RPL_LOCALUSERS: ({ req, rest }: EnricherCtx) => {
-    const client = req()
+  RPL_LOCALUSERS: ({ param, rest }: EnricherCtx) => {
+    const client = param()
     const r = rest()
     return {
       client,
@@ -117,8 +117,8 @@ export const numerics200 = {
   },
 
   // params: <client> [<u> <m>] :Current global users <u>, max <m>
-  RPL_GLOBALUSERS: ({ req, rest }: EnricherCtx) => {
-    const client = req()
+  RPL_GLOBALUSERS: ({ param, rest }: EnricherCtx) => {
+    const client = param()
     const r = rest()
     return {
       client,
@@ -129,9 +129,9 @@ export const numerics200 = {
   },
 
   // params: <client> <nick> :has client certificate fingerprint <fingerprint>
-  RPL_WHOISCERTFP: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  RPL_WHOISCERTFP: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 }

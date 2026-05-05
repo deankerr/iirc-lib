@@ -2,343 +2,343 @@ import type { EnricherCtx } from './types'
 
 export const numerics300 = {
   // params: <client> <nick> :<message>
-  RPL_AWAY: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    message: req(),
+  RPL_AWAY: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    message: trailing(),
   }),
 
   // params: <client> :[<reply>{ <reply>}]
-  RPL_USERHOST: ({ req }: EnricherCtx) => ({
-    client: req(),
-    replies: req(),
+  RPL_USERHOST: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    replies: trailing(),
   }),
 
   // params: <client> :You are no longer marked as being away
-  RPL_UNAWAY: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_UNAWAY: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :You have been marked as being away
-  RPL_NOWAWAY: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_NOWAWAY: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :has identified for this nick
-  RPL_WHOISREGNICK: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  RPL_WHOISREGNICK: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> <username> <host> * :<realname>
-  RPL_WHOISUSER: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    username: req(),
-    host: req(),
-    realname: req(),
+  RPL_WHOISUSER: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    username: param(),
+    host: param(),
+    realname: trailing(),
   }),
 
   // params: <client> <nick> <server> :<server info>
-  RPL_WHOISSERVER: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    server: req(),
-    serverInfo: req(),
+  RPL_WHOISSERVER: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    server: param(),
+    serverInfo: trailing(),
   }),
 
   // params: <client> <nick> :is an IRC operator
-  RPL_WHOISOPERATOR: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  RPL_WHOISOPERATOR: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> <username> <host> * :<realname>
-  RPL_WHOWASUSER: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    username: req(),
-    host: req(),
-    realname: req(),
+  RPL_WHOWASUSER: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    username: param(),
+    host: param(),
+    realname: trailing(),
   }),
 
   // params: <client> <mask> :End of WHO list
-  RPL_ENDOFWHO: ({ req }: EnricherCtx) => ({
-    client: req(),
-    mask: req(),
-    text: req(),
+  RPL_ENDOFWHO: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    mask: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> <secs> <signon> :seconds idle, signon time
-  RPL_WHOISIDLE: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    secs: req(),
-    signon: req(),
-    text: req(),
+  RPL_WHOISIDLE: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    secs: param(),
+    signon: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :End of /WHOIS list
-  RPL_ENDOFWHOIS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  RPL_ENDOFWHOIS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :blah blah blah
-  RPL_WHOISSPECIAL: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  RPL_WHOISSPECIAL: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :[prefix]<channel>{ [prefix]<channel>}
-  RPL_WHOISCHANNELS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    channels: req(),
+  RPL_WHOISCHANNELS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    channels: trailing(),
   }),
 
   // params: <client> Channel :Users  Name
-  RPL_LISTSTART: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_LISTSTART: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> <client count> :<topic>
-  RPL_LIST: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    clientCount: req(),
-    topic: req(),
+  RPL_LIST: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    clientCount: param(),
+    topic: trailing(),
   }),
 
   // params: <client> :End of /LIST
-  RPL_LISTEND: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_LISTEND: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> <creationtime>
-  RPL_CREATIONTIME: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    creationtime: req(),
+  RPL_CREATIONTIME: ({ param }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    creationtime: param(),
   }),
 
   // params: <client> <nick> <account> :is logged in as
-  RPL_WHOISACCOUNT: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    account: req(),
-    text: req(),
+  RPL_WHOISACCOUNT: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    account: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> :No topic is set
-  RPL_NOTOPIC: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  RPL_NOTOPIC: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel>
-  RPL_INVITELIST: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
+  RPL_INVITELIST: ({ param }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
   }),
 
   // params: <client> :End of /INVITE list
-  RPL_ENDOFINVITELIST: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_ENDOFINVITELIST: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :is actually ...
-  RPL_WHOISACTUALLY: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  RPL_WHOISACTUALLY: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> <channel>
-  RPL_INVITING: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    channel: req(),
+  RPL_INVITING: ({ param }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    channel: param(),
   }),
 
   // params: <client> <channel> <mask>
-  RPL_INVEXLIST: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    mask: req(),
+  RPL_INVEXLIST: ({ param }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    mask: param(),
   }),
 
   // params: <client> <channel> :End of Channel Invite Exception List
-  RPL_ENDOFINVEXLIST: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  RPL_ENDOFINVEXLIST: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> <mask>
-  RPL_EXCEPTLIST: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    mask: req(),
+  RPL_EXCEPTLIST: ({ param }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    mask: param(),
   }),
 
   // params: <client> <channel> :End of channel exception list
-  RPL_ENDOFEXCEPTLIST: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  RPL_ENDOFEXCEPTLIST: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <version> <server> :<comments>
-  RPL_VERSION: ({ req }: EnricherCtx) => ({
-    client: req(),
-    version: req(),
-    server: req(),
-    comments: req(),
+  RPL_VERSION: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    version: param(),
+    server: param(),
+    comments: trailing(),
   }),
 
   // params: <client> <channel> <username> <host> <server> <nick> <flags> :<hopcount> <realname>
-  RPL_WHOREPLY: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    username: req(),
-    host: req(),
-    server: req(),
-    nick: req(),
-    flags: req(),
-    text: req(),
+  RPL_WHOREPLY: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    username: param(),
+    host: param(),
+    server: param(),
+    nick: param(),
+    flags: param(),
+    text: trailing(),
   }),
 
   // params: <client> <server1> <server2> :<hopcount> <server info>
-  RPL_LINKS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    server1: req(),
-    server2: req(),
-    text: req(),
+  RPL_LINKS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    server1: param(),
+    server2: param(),
+    text: trailing(),
   }),
 
   // params: <client> * :End of /LINKS list
-  RPL_ENDOFLINKS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_ENDOFLINKS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :End of WHOWAS
-  RPL_ENDOFWHOWAS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  RPL_ENDOFWHOWAS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> :<string>
-  RPL_INFO: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_INFO: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :<line of the motd>
-  RPL_MOTD: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_MOTD: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :End of INFO list
-  RPL_ENDOFINFO: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_ENDOFINFO: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :- <server> Message of the day -
-  RPL_MOTDSTART: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_MOTDSTART: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :End of /MOTD command.
-  RPL_ENDOFMOTD: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_ENDOFMOTD: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :is connecting from *@localhost 127.0.0.1
-  RPL_WHOISHOST: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  RPL_WHOISHOST: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :is using modes +ailosw
-  RPL_WHOISMODES: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  RPL_WHOISMODES: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> :You are now an IRC operator
-  RPL_YOUREOPER: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_YOUREOPER: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <config file> :Rehashing
-  RPL_REHASHING: ({ req }: EnricherCtx) => ({
-    client: req(),
-    configFile: req(),
-    text: req(),
+  RPL_REHASHING: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    configFile: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> <modestring> <mode arguments>...
-  RPL_CHANNELMODEIS: ({ req, rest }: EnricherCtx) => {
-    const client = req()
-    const channel = req()
-    const modestring = req()
+  RPL_CHANNELMODEIS: ({ param, rest }: EnricherCtx) => {
+    const client = param()
+    const channel = param()
+    const modestring = param()
     return { client, channel, modestring, modeArgs: rest() }
   },
 
   // params: <client> <channel> :<topic>
-  RPL_TOPIC: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    topic: req(),
+  RPL_TOPIC: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    topic: trailing(),
   }),
 
   // params: <client> <channel> <nick> <setat>
-  RPL_TOPICWHOTIME: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    nick: req(),
-    setat: req(),
+  RPL_TOPICWHOTIME: ({ param }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    nick: param(),
+    setat: param(),
   }),
 
   // params: <client> <symbol> <channel> :[prefix]<nick>{ [prefix]<nick>}
-  RPL_NAMREPLY: ({ req }: EnricherCtx) => ({
-    client: req(),
-    symbol: req(),
-    channel: req(),
-    names: req(),
+  RPL_NAMREPLY: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    symbol: param(),
+    channel: param(),
+    names: trailing(),
   }),
 
   // params: <client> <channel> :<info>
-  RPL_ENDOFNAMES: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
+  RPL_ENDOFNAMES: ({ param }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
   }),
 
   // params: <client> <channel> <mask> [<who> <set-ts>]
-  RPL_BANLIST: ({ req, rest }: EnricherCtx) => {
-    const client = req()
-    const channel = req()
-    const mask = req()
+  RPL_BANLIST: ({ param, rest }: EnricherCtx) => {
+    const client = param()
+    const channel = param()
+    const mask = param()
     const r = rest()
     return {
       client,
@@ -350,9 +350,9 @@ export const numerics300 = {
   },
 
   // params: <client> <server> [<timestamp> [<TS offset>]] :<human-readable time>
-  RPL_TIME: ({ req, rest }: EnricherCtx) => {
-    const client = req()
-    const server = req()
+  RPL_TIME: ({ param, rest }: EnricherCtx) => {
+    const client = param()
+    const server = param()
     const r = rest()
     return {
       client,

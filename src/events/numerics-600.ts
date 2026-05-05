@@ -2,30 +2,30 @@ import type { EnricherCtx } from './types'
 
 export const numerics600 = {
   // params: <client> :STARTTLS successful, proceed with TLS handshake
-  RPL_STARTTLS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  RPL_STARTTLS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :is using a secure connection
-  RPL_WHOISSECURE: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  RPL_WHOISSECURE: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> :STARTTLS failed (Wrong moon phase)
-  ERR_STARTTLS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_STARTTLS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <target chan/user> <mode char> <parameter> :<description>
-  ERR_INVALIDMODEPARAM: ({ req }: EnricherCtx) => ({
-    client: req(),
-    target: req(),
-    modeChar: req(),
-    parameter: req(),
-    description: req(),
+  ERR_INVALIDMODEPARAM: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    target: param(),
+    modeChar: param(),
+    parameter: param(),
+    description: trailing(),
   }),
 }

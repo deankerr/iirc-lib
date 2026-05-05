@@ -2,9 +2,9 @@ import type { EnricherCtx } from './types'
 
 export const numerics400 = {
   // params: <client> <command>{ <subcommand>} :<info>
-  ERR_UNKNOWNERROR: ({ req, rest }: EnricherCtx) => {
-    const client = req()
-    const command = req()
+  ERR_UNKNOWNERROR: ({ param, rest }: EnricherCtx) => {
+    const client = param()
+    const command = param()
     const r = rest()
     return {
       client,
@@ -15,229 +15,229 @@ export const numerics400 = {
   },
 
   // params: <client> <nickname> :No such nick/channel
-  ERR_NOSUCHNICK: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nickname: req(),
-    text: req(),
+  ERR_NOSUCHNICK: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nickname: param(),
+    text: trailing(),
   }),
 
   // params: <client> <server name> :No such server
-  ERR_NOSUCHSERVER: ({ req }: EnricherCtx) => ({
-    client: req(),
-    serverName: req(),
-    text: req(),
+  ERR_NOSUCHSERVER: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    serverName: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> :No such channel
-  ERR_NOSUCHCHANNEL: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  ERR_NOSUCHCHANNEL: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> :Cannot send to channel
-  ERR_CANNOTSENDTOCHAN: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  ERR_CANNOTSENDTOCHAN: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> :You have joined too many channels
-  ERR_TOOMANYCHANNELS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  ERR_TOOMANYCHANNELS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nickname> :There was no such nickname
-  ERR_WASNOSUCHNICK: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nickname: req(),
-    text: req(),
+  ERR_WASNOSUCHNICK: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nickname: param(),
+    text: trailing(),
   }),
 
   // params: <client> :No origin specified
-  ERR_NOORIGIN: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_NOORIGIN: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :No recipient given (<command>)
-  ERR_NORECIPIENT: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_NORECIPIENT: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :No text to send
-  ERR_NOTEXTTOSEND: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_NOTEXTTOSEND: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :Input line was too long
-  ERR_INPUTTOOLONG: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_INPUTTOOLONG: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <command> :Unknown command
-  ERR_UNKNOWNCOMMAND: ({ req }: EnricherCtx) => ({
-    client: req(),
-    command: req(),
-    text: req(),
+  ERR_UNKNOWNCOMMAND: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    command: param(),
+    text: trailing(),
   }),
 
   // params: <client> :MOTD File is missing
-  ERR_NOMOTD: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_NOMOTD: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :No nickname given
-  ERR_NONICKNAMEGIVEN: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_NONICKNAMEGIVEN: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :Erroneus nickname
-  ERR_ERRONEUSNICKNAME: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  ERR_ERRONEUSNICKNAME: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :Nickname is already in use
-  ERR_NICKNAMEINUSE: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  ERR_NICKNAMEINUSE: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> :Nickname collision KILL from <user>@<host>
-  ERR_NICKCOLLISION: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    text: req(),
+  ERR_NICKCOLLISION: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> <channel> :They aren't on that channel
-  ERR_USERNOTINCHANNEL: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    channel: req(),
-    text: req(),
+  ERR_USERNOTINCHANNEL: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> :You're not on that channel
-  ERR_NOTONCHANNEL: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  ERR_NOTONCHANNEL: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <nick> <channel> :is already on channel
-  ERR_USERONCHANNEL: ({ req }: EnricherCtx) => ({
-    client: req(),
-    nick: req(),
-    channel: req(),
-    text: req(),
+  ERR_USERONCHANNEL: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    nick: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> :You have not registered
-  ERR_NOTREGISTERED: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_NOTREGISTERED: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <command> :Not enough parameters
-  ERR_NEEDMOREPARAMS: ({ req }: EnricherCtx) => ({
-    client: req(),
-    command: req(),
-    text: req(),
+  ERR_NEEDMOREPARAMS: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    command: param(),
+    text: trailing(),
   }),
 
   // params: <client> :You may not reregister
-  ERR_ALREADYREGISTERED: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_ALREADYREGISTERED: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :Password incorrect
-  ERR_PASSWDMISMATCH: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_PASSWDMISMATCH: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :You are banned from this server.
-  ERR_YOUREBANNEDCREEP: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_YOUREBANNEDCREEP: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> :Cannot join channel (+l)
-  ERR_CHANNELISFULL: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  ERR_CHANNELISFULL: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <modechar> :is unknown mode char to me
-  ERR_UNKNOWNMODE: ({ req }: EnricherCtx) => ({
-    client: req(),
-    modechar: req(),
-    text: req(),
+  ERR_UNKNOWNMODE: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    modechar: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> :Cannot join channel (+i)
-  ERR_INVITEONLYCHAN: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  ERR_INVITEONLYCHAN: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> :Cannot join channel (+b)
-  ERR_BANNEDFROMCHAN: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  ERR_BANNEDFROMCHAN: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> :Cannot join channel (+k)
-  ERR_BADCHANNELKEY: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  ERR_BADCHANNELKEY: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> :Bad Channel Mask
-  ERR_BADCHANMASK: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  ERR_BADCHANMASK: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> :Permission Denied- You're not an IRC operator
-  ERR_NOPRIVILEGES: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_NOPRIVILEGES: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> <channel> :You're not channel operator
-  ERR_CHANOPRIVSNEEDED: ({ req }: EnricherCtx) => ({
-    client: req(),
-    channel: req(),
-    text: req(),
+  ERR_CHANOPRIVSNEEDED: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    channel: param(),
+    text: trailing(),
   }),
 
   // params: <client> :You cant kill a server!
-  ERR_CANTKILLSERVER: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_CANTKILLSERVER: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 
   // params: <client> :No O-lines for your host
-  ERR_NOOPERHOST: ({ req }: EnricherCtx) => ({
-    client: req(),
-    text: req(),
+  ERR_NOOPERHOST: ({ param, trailing }: EnricherCtx) => ({
+    client: param(),
+    text: trailing(),
   }),
 }
