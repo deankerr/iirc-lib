@@ -199,7 +199,7 @@ export function channelTracker(runtime: Runtime): void {
     if (event.command === 'TOPIC') {
       const channel = ensureChannel(event.channel)
       if (event.topic === '') {
-        channel.topic = undefined
+        delete channel.topic
         return
       }
 
@@ -214,7 +214,7 @@ export function channelTracker(runtime: Runtime): void {
 
     if (event.command === 'RPL_NOTOPIC') {
       const channel = ensureChannel(event.channel)
-      channel.topic = undefined
+      delete channel.topic
       return
     }
 

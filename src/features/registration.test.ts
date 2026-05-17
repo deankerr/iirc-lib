@@ -20,7 +20,7 @@ function createHarness(configOverrides: Partial<RuntimeInputConfig> = {}) {
   const runtime = createRuntime(config, transport.stream)
   const errors: Error[] = []
 
-  runtime.on('error', (error) => errors.push(error))
+  runtime.on('error', (error) => void errors.push(error))
 
   // Register explicitly so tests can inspect the initial registration burst.
   runtime.register()

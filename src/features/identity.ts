@@ -18,12 +18,14 @@ export function identity(runtime: Runtime): void {
     }
 
     if (event.command === 'RPL_LOGGEDIN') {
-      runtime.connectionState.account = event.account ?? runtime.connectionState.account
+      if (event.account !== undefined) {
+        runtime.connectionState.account = event.account
+      }
       return
     }
 
     if (event.command === 'RPL_LOGGEDOUT') {
-      runtime.connectionState.account = undefined
+      delete runtime.connectionState.account
     }
   })
 }

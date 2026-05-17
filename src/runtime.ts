@@ -195,10 +195,10 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     const host = atIndex === -1 ? undefined : source.slice(atIndex + 1) || undefined
 
     return {
-      host,
       isSelf: this.sameIdentifier(name, this.connectionState.nick),
       name,
-      user,
+      ...(user !== undefined && { user }),
+      ...(host !== undefined && { host }),
     }
   }
 

@@ -51,7 +51,7 @@ interface AttemptCtx {
 // Phase 1: wait for the TCP/TLS handshake to complete or fail.
 async function awaitConnection(server: ConnectionOption, ctx: AttemptCtx): Promise<void> {
   // oxlint-disable-next-line promise/avoid-new
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const readyEvent = server.tls ? 'secureConnect' : 'connect'
     const { stream } = ctx
 
@@ -85,7 +85,7 @@ async function runSession(
   log: (event: string, fields?: Record<string, unknown>) => void,
 ): Promise<void> {
   // oxlint-disable-next-line promise/avoid-new
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     let settled = false
     let quitSent = false
     const { stream } = ctx
@@ -150,7 +150,9 @@ async function runSession(
         return
       }
 
-      settle(resolve)
+      settle(() => {
+        resolve()
+      })
     })
 
     runtime.register()
@@ -209,8 +211,8 @@ function slugify(value: string): string {
   const slug = value
     .trim()
     .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '')
+    .replaceAll(/[^a-z0-9]+/gu, '-')
+    .replaceAll(/^-+|-+$/gu, '')
   return slug.length > 0 ? slug : 'target'
 }
 

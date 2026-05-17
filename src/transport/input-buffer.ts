@@ -43,7 +43,7 @@ export class InputBuffer {
       this.skipping = true
     }
 
-    return { lines, overflowExcerpt }
+    return overflowExcerpt === undefined ? { lines } : { lines, overflowExcerpt }
   }
 
   clear(): void {

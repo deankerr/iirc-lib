@@ -213,7 +213,7 @@ describe('runtime parse_error', () => {
     runtime.register()
 
     const parseErrors: { message: IrcMessage; error: Error }[] = []
-    runtime.on('parse_error', (message, error) => parseErrors.push({ error, message }))
+    runtime.on('parse_error', (message, error) => void parseErrors.push({ error, message }))
 
     // PRIVMSG with no params — param() will throw on missing target
     transport.receive('PRIVMSG')
@@ -228,7 +228,7 @@ describe('runtime parse_error', () => {
     runtime.register()
 
     const parseErrors: { message: IrcMessage; error: Error }[] = []
-    runtime.on('parse_error', (message, error) => parseErrors.push({ error, message }))
+    runtime.on('parse_error', (message, error) => void parseErrors.push({ error, message }))
 
     // PRIVMSG with target but no text — trailing() will throw
     transport.receive('PRIVMSG #dev')
@@ -243,7 +243,7 @@ describe('runtime parse_error', () => {
     runtime.register()
 
     const events: IrcEvent[] = []
-    runtime.on('event', (e) => events.push(e))
+    runtime.on('event', (e) => void events.push(e))
 
     transport.receive('PRIVMSG')
     transport.receive(':alice!u@h PRIVMSG #dev :hello')

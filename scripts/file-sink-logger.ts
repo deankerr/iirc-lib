@@ -47,7 +47,11 @@ export class FileSinkLogger {
 
     if (sink === undefined) {
       const file = Bun.file(join(this.instanceDir, filename))
-      sink = file.writer({ highWaterMark: this.options.highWaterMark })
+      sink = file.writer(
+        this.options.highWaterMark === undefined
+          ? {}
+          : { highWaterMark: this.options.highWaterMark },
+      )
 
       if (this.options.ref === false) {
         sink.unref()
