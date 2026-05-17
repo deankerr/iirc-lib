@@ -7,7 +7,7 @@ import { OutputQueue } from './output-queue'
 import { parseMessage } from './parse-message'
 import type { IrcCommand, IrcMessage } from './types'
 
-export type TransportEvents = {
+export interface TransportEvents {
   read: [line: string]
   write: [line: string]
   parse_error: [line: string, error: Error]

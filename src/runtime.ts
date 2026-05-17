@@ -15,7 +15,7 @@ import { registration } from './features/registration'
 import type { IrcCommand, IrcMessage } from './transport'
 import { Transport } from './transport'
 
-export type ModeChange = {
+export interface ModeChange {
   action: '+' | '-'
   mode: string
   argument?: string
@@ -26,7 +26,7 @@ export type ModeChange = {
 // a subscriber that has not yet been registered will miss events.
 const defaultRuntimeFeatures = [registration, ping, identity, isupport, channelTracker]
 
-export type RuntimeEvents = {
+export interface RuntimeEvents {
   register: [stream: Duplex]
   event: [event: IrcEvent]
   parse_error: [message: IrcMessage, error: Error]
@@ -35,7 +35,7 @@ export type RuntimeEvents = {
   error: [Error]
 }
 
-export type ConnectionState = {
+export interface ConnectionState {
   user: string
   realname: string
   registered: boolean
@@ -45,7 +45,7 @@ export type ConnectionState = {
   account?: string
 }
 
-export type ParsedSource = {
+export interface ParsedSource {
   name: string
   user?: string
   host?: string
@@ -113,9 +113,9 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   // Runtime exposes one outbound entry point with two call shapes:
   // a shorthand string + params form for common commands, and the canonical
   // IrcCommand object when callers already have a full command shape.
-  send(command: string, ...params: ReadonlyArray<string | undefined>): void
+  send(command: string, ...params: readonly (string | undefined)[]): void
   send(command: IrcCommand): void
-  send(commandOrMessage: string | IrcCommand, ...params: ReadonlyArray<string | undefined>): void {
+  send(commandOrMessage: string | IrcCommand, ...params: readonly (string | undefined)[]): void {
     if (typeof commandOrMessage === 'string') {
       const definedParams = params.filter((param): param is string => param !== undefined)
       this.transport.send({

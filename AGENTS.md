@@ -1,3 +1,20 @@
+## OXC
+
+- Use `bun run fix` type check, lint, and format with `oxlint`/`oxlint-tsgolint`/`oxfmt`
+- Do not use `tsc`.
+- Inline disables may be used if the reasoning is justified
+- Vendored code like `shadcn-ui` is added to ignorePatterns, e.g. `**/components/ui/**`
+- `sort-keys` is enabled - allow it to re-order object keys.
+
+## TypeScript 6
+
+- `@types/*` packages are manually specified `"types": ["bun"]`, only if required
+- Subpath Imports support, e.g. `"#/*": "./dist/*"`, replace deep relative paths `../../utils.js` with `#root/utils.js`
+- `rootDir` defaults to `.`
+- `baseUrl` is deprecated
+- `target` `es2025` supports `RegExp.escape`, `Promise.try`, `Iterator` methods, `Set` methods
+- `target` `esnext` supports `Temporal`, `Map.getOrInsert`
+
 # iirc-lib
 
 IRC client library. Protocol parsing, connection lifecycle, state tracking, message enrichment.

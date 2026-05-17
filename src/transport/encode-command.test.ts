@@ -3,19 +3,19 @@ import { describe, expect, test } from 'bun:test'
 import { encodeCommand } from './encode-command'
 import type { IrcCommand, IrcTags } from './types'
 
-type MessageJoinAtoms = {
+interface MessageJoinAtoms {
   tags?: IrcTags
   source?: string
   verb: string
   params?: string[]
 }
 
-type MessageJoinFixture = {
-  tests: Array<{
+interface MessageJoinFixture {
+  tests: {
     desc?: string
     atoms: MessageJoinAtoms
     matches: string[]
-  }>
+  }[]
 }
 
 // The outbound encoder currently models only command + params. We still use the

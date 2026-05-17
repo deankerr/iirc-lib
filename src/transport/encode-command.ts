@@ -6,7 +6,7 @@ export function encodeCommand(command: IrcCommand): string {
   return buildLine(command.command, command.params)
 }
 
-function buildLine(command: string, params: ReadonlyArray<string>): string {
+function buildLine(command: string, params: readonly string[]): string {
   let line = command.toUpperCase()
   const lastDefinedIndex = params.length - 1
 
@@ -22,7 +22,7 @@ function buildLine(command: string, params: ReadonlyArray<string>): string {
 }
 
 function assertDefinedParams(command: IrcCommand): void {
-  for (const param of command.params as ReadonlyArray<string | undefined>) {
+  for (const param of command.params as readonly (string | undefined)[]) {
     if (param === undefined) {
       throw new Error(`Invalid IRC command "${command.command}": params must not contain undefined`)
     }

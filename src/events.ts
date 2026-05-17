@@ -5,7 +5,7 @@ import type { ParsedSource } from './runtime'
 import type { IrcMessage } from './transport'
 
 // Fields automatically added to every event by the dispatcher.
-type EventBase = {
+interface EventBase {
   from: ParsedSource
   raw: IrcMessage
 }

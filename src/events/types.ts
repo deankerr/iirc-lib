@@ -3,7 +3,7 @@
 // trailing() — next trailing param; throws if missing, allows empty string.
 // optional() — next param; returns undefined if missing.
 // rest()     — all remaining params as an array, consumes them.
-export type EnricherCtx = {
+export interface EnricherCtx {
   param: () => string
   trailing: () => string
   optional: () => string | undefined

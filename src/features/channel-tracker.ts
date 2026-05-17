@@ -1,13 +1,13 @@
 import { CaseFoldMap } from '../case-fold-map'
 import type { Runtime } from '../runtime'
 
-export type ChannelTopic = {
+export interface ChannelTopic {
   text: string
   setAt?: string
   setBy?: string
 }
 
-export type ChannelMember = {
+export interface ChannelMember {
   nick: string
 }
 

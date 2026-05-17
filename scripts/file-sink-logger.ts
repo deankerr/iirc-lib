@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
-type FileLoggerOptions = {
+interface FileLoggerOptions {
   highWaterMark?: number
   ref?: boolean
 }

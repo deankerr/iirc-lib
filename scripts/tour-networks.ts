@@ -25,24 +25,24 @@ const TOUR_OUT_DIR = resolvePath(
 )
 const TLS_REJECT_UNAUTHORIZED = true
 
-type TourOptions = {
+interface TourOptions {
   startAt: number
   limit?: number
   skipTls: boolean
 }
 
-type ConnectionOption = {
+interface ConnectionOption {
   host: string
   port: number
   tls: boolean
 }
 
-type NetworkEntry = {
+interface NetworkEntry {
   name: string
   servers: ConnectionOption[]
 }
 
-type AttemptCtx = {
+interface AttemptCtx {
   stream: Socket | TLSSocket | undefined
   connectTimer: ReturnType<typeof setTimeout> | undefined
   sessionTimer: ReturnType<typeof setTimeout> | undefined
@@ -51,7 +51,7 @@ type AttemptCtx = {
 // Phase 1: wait for the TCP/TLS handshake to complete or fail.
 async function awaitConnection(server: ConnectionOption, ctx: AttemptCtx): Promise<void> {
   // oxlint-disable-next-line promise/avoid-new
-  return new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     const readyEvent = server.tls ? 'secureConnect' : 'connect'
     const { stream } = ctx
 
@@ -85,7 +85,7 @@ async function runSession(
   log: (event: string, fields?: Record<string, unknown>) => void,
 ): Promise<void> {
   // oxlint-disable-next-line promise/avoid-new
-  return new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     let settled = false
     let quitSent = false
     const { stream } = ctx
@@ -231,7 +231,7 @@ function buildOutputPath(
 async function loadNetworkList(): Promise<NetworkEntry[]> {
   const file = Bun.file(NETWORK_LIST_PATH)
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return file.json() as Promise<NetworkEntry[]>
+  return await (file.json() as Promise<NetworkEntry[]>)
 }
 
 async function runTour(options: TourOptions): Promise<void> {

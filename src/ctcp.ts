@@ -1,4 +1,4 @@
-export type ParsedCtcp = {
+export interface ParsedCtcp {
   command: string
   arguments: string
 }

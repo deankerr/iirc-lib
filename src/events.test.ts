@@ -212,7 +212,7 @@ describe('runtime parse_error', () => {
     const runtime = createRuntime({ nick: 'bot', sendDelayMs: 0 }, transport.stream)
     runtime.register()
 
-    const parseErrors: Array<{ message: IrcMessage; error: Error }> = []
+    const parseErrors: { message: IrcMessage; error: Error }[] = []
     runtime.on('parse_error', (message, error) => parseErrors.push({ error, message }))
 
     // PRIVMSG with no params — param() will throw on missing target
@@ -227,7 +227,7 @@ describe('runtime parse_error', () => {
     const runtime = createRuntime({ nick: 'bot', sendDelayMs: 0 }, transport.stream)
     runtime.register()
 
-    const parseErrors: Array<{ message: IrcMessage; error: Error }> = []
+    const parseErrors: { message: IrcMessage; error: Error }[] = []
     runtime.on('parse_error', (message, error) => parseErrors.push({ error, message }))
 
     // PRIVMSG with target but no text — trailing() will throw

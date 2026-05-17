@@ -3,18 +3,18 @@ import { describe, expect, test } from 'bun:test'
 import { parseMessage } from './parse-message'
 import type { IrcMessage, IrcTags } from './types'
 
-type MessageAtoms = {
+interface MessageAtoms {
   tags?: IrcTags
   source?: string
   verb: string
   params?: string[]
 }
 
-type MessageSplitFixture = {
-  tests: Array<{
+interface MessageSplitFixture {
+  tests: {
     input: string
     atoms: MessageAtoms
-  }>
+  }[]
 }
 
 // These tests pin our inbound parser to the shared IRC fixture corpus in

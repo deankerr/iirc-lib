@@ -1,7 +1,7 @@
 // 8191 bytes (tags) + 512 bytes (message incl. CRLF) per IRCv3 spec.
 const MAX_LINE_LENGTH = 8703
 
-export type BufferResult = {
+export interface BufferResult {
   lines: string[]
   overflowExcerpt?: string
 }
