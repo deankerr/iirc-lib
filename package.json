@@ -1,12 +1,21 @@
 {
   "name": "iirc-lib",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "default": "./src/index.ts"
+      "default": "./dist/index.mjs",
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
     }
   },
   "scripts": {
+    "build": "tsdown src/index.ts --dts --format esm --target es2022 --platform node --clean --deps.never-bundle remeda --deps.never-bundle zod",
     "check": "ultracite check --type-aware --type-check",
     "fix": "ultracite fix --type-aware --type-check",
     "prepare": "lefthook install",
@@ -24,6 +33,7 @@
     "oxfmt": "0.48.0",
     "oxlint": "1.63.0",
     "oxlint-tsgolint": "0.22.1",
+    "tsdown": "^0.22.0",
     "typescript": "^6",
     "ultracite": "7.6.4"
   },
