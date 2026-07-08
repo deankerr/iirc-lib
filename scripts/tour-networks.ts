@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import { connect as connectTcp } from 'node:net'
 import type { Socket } from 'node:net'
-import { resolve as resolvePath } from 'node:path'
+import path from 'node:path'
 import process from 'node:process'
 import { connect as connectTls } from 'node:tls'
 import type { TLSSocket } from 'node:tls'
@@ -17,9 +17,9 @@ const CONNECT_TIMEOUT_MS = 10_000
 const SESSION_TIMEOUT_MS = 20_000
 const TOUR_NICK = 'iirc-tour'
 const QUIT_MESSAGE = 'iirc-lib network tour complete'
-const DATA_DIR = resolvePath('data')
-const NETWORK_LIST_PATH = resolvePath(DATA_DIR, 'network-list.json')
-const TOUR_OUT_DIR = resolvePath(
+const DATA_DIR = path.resolve('data')
+const NETWORK_LIST_PATH = path.resolve(DATA_DIR, 'network-list.json')
+const TOUR_OUT_DIR = path.resolve(
   DATA_DIR,
   `tour-networks-${new Date().toISOString().replaceAll(':', '-')}`,
 )
@@ -183,13 +183,17 @@ async function runAttempt(
   })
 
   try {
+    // tsgolint mis-resolves bun-types' `declare module "node:tls"` augmentation against
+    // @types/node 22 (where node:tls is a re-export shell), leaving connectTls error-typed.
+    // Plain tsc reports no error here.
+    // oxlint-disable-next-line typescript/no-unsafe-assignment
     ctx.stream = server.tls
       ? connectTls({
           host: server.host,
           port: server.port,
           rejectUnauthorized: TLS_REJECT_UNAUTHORIZED,
           servername: server.host,
-        } as Parameters<typeof connectTls>[0])
+        })
       : connectTcp({ host: server.host, port: server.port })
 
     await awaitConnection(server, ctx)
@@ -224,7 +228,7 @@ function buildOutputPath(
 ): string {
   const networkSlug = slugify(networkName)
   const serverSlug = slugify(`${server.host}-${server.port}-${server.tls ? 'tls' : 'plain'}`)
-  return resolvePath(
+  return path.resolve(
     TOUR_OUT_DIR,
     `${String(networkNumber).padStart(3, '0')}-${networkSlug}-${String(attemptOffset + 1).padStart(2, '0')}-${serverSlug}.ndjson`,
   )
@@ -274,6 +278,9 @@ async function runTour(options: TourOptions): Promise<void> {
     for (const [attemptOffset, server] of servers.entries()) {
       const outputPath = buildOutputPath(networkNumber, target.name, attemptOffset, server)
 
+      // Sequential by design: only try the next server if this one failed to
+      // connect, so parallelising with Promise.all would defeat the fallback.
+      // oxlint-disable-next-line no-await-in-loop
       const connected = await runAttempt(target.name, server, attemptOffset + 1, outputPath)
 
       if (connected) {

@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import path from 'node:path'
 
 interface FileLoggerOptions {
   highWaterMark?: number
@@ -25,7 +25,7 @@ export class FileSinkLogger {
     instance = FileSinkLogger.localISOString(),
     options: FileLoggerOptions = {},
   ) {
-    this.instanceDir = join(logsDir, instance)
+    this.instanceDir = path.join(logsDir, instance)
     this.options = options
 
     void mkdir(this.instanceDir, { recursive: true })
@@ -46,7 +46,7 @@ export class FileSinkLogger {
     let sink = this.sinks.get(filename)
 
     if (sink === undefined) {
-      const file = Bun.file(join(this.instanceDir, filename))
+      const file = Bun.file(path.join(this.instanceDir, filename))
       sink = file.writer(
         this.options.highWaterMark === undefined
           ? {}

@@ -14,9 +14,9 @@ const ISUPPORT_DEFAULTS = {
 // Parse a PREFIX value like "(ov)@+" into a mode-letter string and a
 // prefix-character → mode-letter map.
 function parsePrefix(value: string): { modes: string; prefixToMode: Map<string, string> } {
-  const match = /^\(([^)]*)\)(.*)$/u.exec(value)
-  const modes = match?.[1] ?? ''
-  const prefixes = match?.[2] ?? ''
+  const match = /^\((?<modes>[^)]*)\)(?<prefixes>.*)$/u.exec(value)
+  const modes = match?.groups?.modes ?? ''
+  const prefixes = match?.groups?.prefixes ?? ''
   const prefixToMode = new Map<string, string>()
 
   for (let index = 0; index < prefixes.length; index += 1) {

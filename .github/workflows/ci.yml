@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # bun-version-file reads the packageManager field, keeping CI on the same bun as local dev.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+
+      # Same gates as prepublishOnly: format/lint/type check, then tests.
+      - run: bun run check
+      - run: bun test
+
+      # Confirm the package builds; prepack runs this at publish time.
+      - run: bun run build

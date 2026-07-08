@@ -4,29 +4,15 @@ import core from 'ultracite/oxlint/core'
 export default defineConfig({
   extends: [core],
   ignorePatterns: [
+    // ── Ultracite defaults (build output, generated, lock files) ──────
+    ...(core.ignorePatterns ?? []),
+
     // ── Generated ────────────────────────────────────────────────
     '**/.alchemy/**',
     '**/.conductor/**',
     '**/.context/**',
-    '**/.next/**',
-    '**/.output/**',
-    '**/.turbo/**',
-    '**/.vercel/**',
-    '**/.vite/**',
-    '**/build/**',
-    '**/dist/**',
-    '**/out/**',
     '**/__root.tsx',
     '**/routeTree.gen.ts',
-    '**/next-env.d.ts',
-    '**/worker-configuration.d.ts',
-
-    // ── Lock files ────────────────────────────────────────────────────
-    '**/bun.lock',
-    '**/bun.lockb',
-    '**/package-lock.json',
-    '**/yarn.lock',
-    '**/pnpm-lock.yaml',
 
     // ── Vendored ────────────────────────────────────────────────────
     '.agents/**',

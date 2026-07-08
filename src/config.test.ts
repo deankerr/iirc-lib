@@ -1,7 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 
-import { z } from 'zod'
-
 import { resolveConfig } from './config'
 
 describe('resolveConfig', () => {
@@ -37,11 +35,11 @@ describe('resolveConfig', () => {
   })
 
   test('normalises whitespace-only nick to error', () => {
-    expect(() => resolveConfig({ nick: '  ' })).toThrow(z.ZodError)
+    expect(() => resolveConfig({ nick: '  ' })).toThrow('nick is required and must be non-empty')
   })
 
   test('throws on empty nick', () => {
-    expect(() => resolveConfig({ nick: '' })).toThrow(z.ZodError)
+    expect(() => resolveConfig({ nick: '' })).toThrow('nick is required and must be non-empty')
   })
 
   test('falls back to nick when user is whitespace-only', () => {
@@ -55,7 +53,9 @@ describe('resolveConfig', () => {
   })
 
   test('throws on negative sendDelayMs', () => {
-    expect(() => resolveConfig({ nick: 'bot', sendDelayMs: -1 })).toThrow(z.ZodError)
+    expect(() => resolveConfig({ nick: 'bot', sendDelayMs: -1 })).toThrow(
+      'sendDelayMs must be non-negative',
+    )
   })
 
   test('accepts sendDelayMs of 0', () => {
@@ -65,14 +65,32 @@ describe('resolveConfig', () => {
 
   test('throws when sasl is missing username', () => {
     expect(() => resolveConfig({ nick: 'bot', sasl: { password: 'pw', username: '' } })).toThrow(
-      z.ZodError,
+      'sasl.username is required when sasl is configured',
     )
   })
 
   test('throws when sasl is missing password', () => {
     expect(() => resolveConfig({ nick: 'bot', sasl: { password: '', username: 'me' } })).toThrow(
-      z.ZodError,
+      'sasl.password is required when sasl is configured',
     )
+  })
+
+  test('merges requestedCapabilities over the defaults', () => {
+    const config = resolveConfig({ nick: 'bot', requestedCapabilities: ['server-time'] })
+    expect(config.requestedCapabilities).toEqual(['message-tags', 'server-time'])
+  })
+
+  test('does not duplicate default capabilities', () => {
+    const config = resolveConfig({
+      nick: 'bot',
+      requestedCapabilities: ['message-tags', 'server-time'],
+    })
+    expect(config.requestedCapabilities).toEqual(['message-tags', 'server-time'])
+  })
+
+  test('trims and drops empty requested capabilities', () => {
+    const config = resolveConfig({ nick: 'bot', requestedCapabilities: [' server-time ', '  '] })
+    expect(config.requestedCapabilities).toEqual(['message-tags', 'server-time'])
   })
 
   test('auto-adds sasl capability when sasl config is provided', () => {
