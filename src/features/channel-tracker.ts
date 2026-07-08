@@ -201,9 +201,11 @@ export function channelTracker(runtime: Runtime): void {
         return
       }
 
+      // A TOPIC command carries no timestamp: it means the topic was just set,
+      // so we record now. Match RPL_TOPICWHOTIME's format — integer unix seconds.
       channel.topic = {
         ...channel.topic,
-        setAt: String(Date.now() / 1000),
+        setAt: String(Math.floor(Date.now() / 1000)),
         setBy: event.from.name,
         text: event.topic,
       }

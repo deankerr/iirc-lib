@@ -1,17 +1,27 @@
+import { parseCtcp } from '../ctcp'
 import type { EnricherCtx } from './types'
 
 export const commandEnrichers = {
   // params: <target> :<text>
-  PRIVMSG: ({ param, trailing }: EnricherCtx) => ({
-    target: param(),
-    text: trailing(),
-  }),
+  // text stays the raw wire trailing; when it wraps a CTCP payload (0x01),
+  // ctcp exposes the parsed { command, arguments } on top — e.g. ACTION for
+  // /me. The field is omitted for ordinary messages. Enrichment adds clarity
+  // without hiding the raw text.
+  PRIVMSG: ({ param, trailing }: EnricherCtx) => {
+    const target = param()
+    const text = trailing()
+    const ctcp = parseCtcp(text)
+    return { target, text, ...(ctcp && { ctcp }) }
+  },
 
   // params: <target> :<text>
-  NOTICE: ({ param, trailing }: EnricherCtx) => ({
-    target: param(),
-    text: trailing(),
-  }),
+  // CTCP replies arrive as NOTICE, so it carries the same optional ctcp field.
+  NOTICE: ({ param, trailing }: EnricherCtx) => {
+    const target = param()
+    const text = trailing()
+    const ctcp = parseCtcp(text)
+    return { target, text, ...(ctcp && { ctcp }) }
+  },
 
   // params: <channel> :<topic>
   TOPIC: ({ param, trailing }: EnricherCtx) => ({

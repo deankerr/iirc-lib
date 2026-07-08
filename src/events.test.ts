@@ -40,6 +40,37 @@ describe('buildEvent', () => {
       expect(event.channel).toBe('#dev')
     })
 
+    test('PRIVMSG enriches a CTCP ACTION but keeps text raw', () => {
+      const d = String.fromCodePoint(1)
+      const event = buildEvent(msg('PRIVMSG', ['#dev', `${d}ACTION waves${d}`]), from)
+      expect(event.command).toBe('PRIVMSG')
+      if (event.command !== 'PRIVMSG') {
+        return
+      }
+      expect(event.ctcp).toEqual({ arguments: 'waves', command: 'ACTION' })
+      expect(event.text).toBe(`${d}ACTION waves${d}`)
+    })
+
+    test('PRIVMSG omits the ctcp field for ordinary messages', () => {
+      const event = buildEvent(msg('PRIVMSG', ['#dev', 'hello world']), from)
+      expect(event.command).toBe('PRIVMSG')
+      if (event.command !== 'PRIVMSG') {
+        return
+      }
+      expect(event.ctcp).toBeUndefined()
+      expect('ctcp' in event).toBe(false)
+    })
+
+    test('NOTICE enriches a CTCP reply', () => {
+      const d = String.fromCodePoint(1)
+      const event = buildEvent(msg('NOTICE', ['me', `${d}VERSION some-client 1.2${d}`]), from)
+      expect(event.command).toBe('NOTICE')
+      if (event.command !== 'NOTICE') {
+        return
+      }
+      expect(event.ctcp).toEqual({ arguments: 'some-client 1.2', command: 'VERSION' })
+    })
+
     test('NICK extracts newnick', () => {
       const event = buildEvent(msg('NICK', ['newnick']), from)
       expect(event.command).toBe('NICK')
