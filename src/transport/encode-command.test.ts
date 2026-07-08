@@ -52,6 +52,54 @@ describe('encodeCommand', () => {
     ).toBe('CAP REQ :message-tags sasl')
   })
 
+  // Framing integrity: CR, LF, and NUL are truncated so one command can never
+  // become more than one line on the wire, regardless of caller input.
+  describe('truncates control characters', () => {
+    test('CRLF in the trailing param cannot inject a second command', () => {
+      expect(encodeCommand({ command: 'PRIVMSG', params: ['#chan', 'hi\r\nJOIN #evil'] })).toBe(
+        'PRIVMSG #chan :hi',
+      )
+    })
+
+    // No colon here: a param with no space is a plain (middle) param, so the
+    // surviving prefix keeps that form. Both are the same value to the server.
+    test('a lone LF also truncates', () => {
+      expect(encodeCommand({ command: 'PRIVMSG', params: ['#chan', 'hi\nQUIT'] })).toBe(
+        'PRIVMSG #chan hi',
+      )
+    })
+
+    test('a lone CR also truncates', () => {
+      expect(encodeCommand({ command: 'PRIVMSG', params: ['#chan', 'hi\rQUIT'] })).toBe(
+        'PRIVMSG #chan hi',
+      )
+    })
+
+    test('NUL truncates', () => {
+      expect(encodeCommand({ command: 'PRIVMSG', params: ['#chan', 'a\u0000b'] })).toBe(
+        'PRIVMSG #chan a',
+      )
+    })
+
+    test('a control char in a middle param truncates the whole line there', () => {
+      expect(encodeCommand({ command: 'PRIVMSG', params: ['#a\nb', 'hi'] })).toBe('PRIVMSG #a')
+    })
+
+    test('a control char in the command truncates', () => {
+      expect(encodeCommand({ command: 'QUIT\r\nOPER a b', params: [] })).toBe('QUIT')
+    })
+
+    test('a leading control char yields an empty line', () => {
+      expect(encodeCommand({ command: '\nPRIVMSG', params: ['#chan', 'hi'] })).toBe('')
+    })
+
+    test('leaves control-free lines untouched', () => {
+      expect(encodeCommand({ command: 'PRIVMSG', params: ['#chan', 'hello world'] })).toBe(
+        'PRIVMSG #chan :hello world',
+      )
+    })
+  })
+
   for (const [index, { desc, atoms, matches }] of supportedCases.entries()) {
     const label = desc ?? atoms.verb
 

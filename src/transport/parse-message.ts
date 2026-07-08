@@ -4,7 +4,7 @@ import type { IrcMessage } from './types'
 // Caller guarantees the line has no \r\n and is non-empty.
 export function parseMessage(line: string): IrcMessage {
   let pos = 0
-  let tags: Record<string, string> = {}
+  let tags: Record<string, string> = newTagRecord()
   let source: string | undefined
 
   if (line[pos] === '@') {
@@ -88,8 +88,16 @@ function parseParams(serialized: string): string[] {
   return params
 }
 
+// Null prototype so a hostile key like `__proto__` is recorded as an ordinary
+// own property instead of silently triggering an Object.prototype accessor
+// (which would drop the tag and make lookups return the prototype object).
+function newTagRecord(): Record<string, string> {
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  return Object.create(null) as Record<string, string>
+}
+
 function parseTags(serialized: string): Record<string, string> {
-  const tags: Record<string, string> = {}
+  const tags = newTagRecord()
 
   for (const part of serialized.split(';')) {
     if (part.length === 0) {

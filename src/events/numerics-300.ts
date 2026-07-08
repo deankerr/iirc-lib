@@ -104,9 +104,12 @@ export const numerics300 = {
   }),
 
   // params: <client> Channel :Users  Name
-  RPL_LISTSTART: ({ param, trailing }: EnricherCtx) => ({
+  // The middle "Channel" param is a legacy column header with no semantic
+  // value, and the exact format varies between servers — take the last param
+  // as text rather than trusting the layout.
+  RPL_LISTSTART: ({ param, rest }: EnricherCtx) => ({
     client: param(),
-    text: trailing(),
+    text: rest().at(-1),
   }),
 
   // params: <client> <channel> <client count> :<topic>
@@ -230,6 +233,7 @@ export const numerics300 = {
   // params: <client> * :End of /LINKS list
   RPL_ENDOFLINKS: ({ param, trailing }: EnricherCtx) => ({
     client: param(),
+    mask: param(),
     text: trailing(),
   }),
 

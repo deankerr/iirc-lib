@@ -31,6 +31,17 @@ describe('parseMessage', () => {
       expect(parseMessage(input)).toEqual(toExpectedMessage(atoms))
     })
   }
+
+  test('records a __proto__ tag faithfully as an own property', () => {
+    const message = parseMessage('@__proto__=evil;a=b PRIVMSG #chan :hi')
+
+    // Null-prototype tag record: the key must round-trip as plain data, not
+    // hit the Object.prototype accessor (dropped tag, object-typed lookup).
+    // oxlint-disable-next-line dot-notation, no-proto -- '__proto__' is wire data here, not a JS property
+    expect(message.tags['__proto__']).toBe('evil')
+    expect(message.tags.a).toBe('b')
+    expect(Object.keys(message.tags)).toEqual(['__proto__', 'a'])
+  })
 })
 
 function toExpectedMessage(atoms: MessageAtoms): IrcMessage {

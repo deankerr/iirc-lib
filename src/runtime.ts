@@ -113,6 +113,14 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
   // Runtime exposes one outbound entry point with two call shapes:
   // a shorthand string + params form for common commands, and the canonical
   // IrcCommand object when callers already have a full command shape.
+  //
+  // Params map positionally to the wire. The final param is the only one that
+  // may contain spaces or be empty — it becomes the trailing. A space in an
+  // earlier param, or an earlier param beginning with ':', is serialized
+  // faithfully and the server will parse it as extra params: validate tokens
+  // (channels, nicks, targets) at the call site, and keep free text last.
+  // CR, LF, and NUL are always truncated at the encoder, so a single send()
+  // can never become more than one message on the wire.
   send(command: string, ...params: readonly (string | undefined)[]): void
   send(command: IrcCommand): void
   send(commandOrMessage: string | IrcCommand, ...params: readonly (string | undefined)[]): void {

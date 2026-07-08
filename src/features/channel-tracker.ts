@@ -11,8 +11,6 @@ export interface ChannelMember {
   nick: string
 }
 
-export type ChannelState = Channel
-
 export class Channel {
   readonly members: CaseFoldMap<ChannelMember>
   // Each mode letter maps to the set of arguments associated with it.

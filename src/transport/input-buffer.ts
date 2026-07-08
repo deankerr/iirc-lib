@@ -35,9 +35,15 @@ export class InputBuffer {
       newlineIndex = this.buffer.indexOf('\n')
     }
 
-    // Remaining buffer is a partial line with no \n yet. If it already
-    // exceeds the protocol limit it will never produce a valid message.
-    if (!this.skipping && this.buffer.length > MAX_LINE_LENGTH) {
+    // Remaining buffer is a partial line with no \n yet.
+    if (this.skipping) {
+      // Still inside the oversized line: everything up to the next \n is part
+      // of it. Discard rather than accumulate, or an endless unterminated line
+      // would grow the buffer without bound — the very thing skipping prevents.
+      this.buffer = ''
+    } else if (this.buffer.length > MAX_LINE_LENGTH) {
+      // A partial line already past the protocol limit will never produce a
+      // valid message. Report it once and skip until the line terminates.
       overflowExcerpt = this.buffer.slice(0, 100)
       this.buffer = ''
       this.skipping = true
