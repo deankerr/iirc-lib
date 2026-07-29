@@ -38,8 +38,8 @@ export function registration(runtime: Runtime): void {
   })
 
   runtime.on('event', (event) => {
-    // RPL_WELCOME and RPL_MYINFO are part of the post-registration burst and
-    // must be handled even after connectionState.registered is set.
+    // RPL_WELCOME is part of the post-registration burst and must be handled
+    // even after the CAP/SASL phase has finished.
     if (event.command === 'RPL_WELCOME') {
       runtime.connectionState.nick = event.client
       if (event.raw.source !== undefined) {
@@ -50,13 +50,8 @@ export function registration(runtime: Runtime): void {
       return
     }
 
-    if (event.command === 'RPL_MYINFO') {
-      runtime.connectionState.serverVersion = event.version
-      return
-    }
-
-    // Stop processing once CAP/SASL phase is complete. RPL_WELCOME and
-    // RPL_MYINFO above are still handled since they arrive after CAP END.
+    // Stop processing once the CAP/SASL phase is complete. RPL_WELCOME above
+    // is still handled because it normally arrives after CAP END.
     if (done) {
       return
     }

@@ -1,6 +1,6 @@
 # Registration State Machine
 
-A single state machine covering the connection registration period. Its job is: **get from `register` through CAP negotiation and SASL, then record the server's `001` and `004` confirmation numerics**.
+A single state machine covering the connection registration period. Its job is: **get from `register` through CAP negotiation and SASL, then record the server's `001` confirmation numeric**.
 
 Every outbound message is produced by a transition. There is one exit point for actions.
 
@@ -11,8 +11,8 @@ Every outbound message is produced by a transition. There is one exit point for 
 - When SASL is configured and fails (NAK, 904, 902, 905), the machine errors out. It does not fall through to unauthenticated registration. The consumer decides whether to close the connection.
 - `PING` during registration is handled externally.
 - `001` is the only guaranteed source of the assigned initial nick. Its trailing welcome text MAY contain `nick!user@host`, but that is opportunistic enrichment rather than a guaranteed structured field.
-- `004` is treated as part of the required post-registration burst, but its version field is not reliably structured across networks. We currently store only `params[2]` and treat it as informational.
-- If the server has no CAP support, it may register us immediately. The CAP/SASL sub-machine simply never receives the CAP LS response it's waiting for and takes no further action. The outer registration handler still records `001`/`004` if they arrive. Self-quenching.
+- `004 RPL_MYINFO` is enriched for consumers like other known numerics, but registration does not use it for state. If a server omits required fields, enrichment emits a parse error and the session continues.
+- If the server has no CAP support, it may register us immediately. The CAP/SASL sub-machine simply never receives the CAP LS response it's waiting for and takes no further action. The outer registration handler still records `001` if it arrives. Self-quenching.
 - The machine does not attempt recovery on CAP NAK or SASL failure. Error means stop.
 - Registration timeout is the consumer's responsibility. No timer in the machine.
 
@@ -20,7 +20,7 @@ Every outbound message is produced by a transition. There is one exit point for 
 
 - **Available caps** (`Set<string>`): accumulated from `CAP LS` lines. Discarded after `CAP REQ`.
 - **Active caps** (`Set<string>`): `CAP ACK` lines are applied directly to `runtime.activeCaps` as they arrive.
-- **Connection state**: `001` updates `nick`, `registered`, and `serverHost`, and MAY enrich `user` and `host` from the trailing welcome text. `004` updates `serverVersion`.
+- **Connection state**: `001` updates `nick`, `registered`, and `serverHost`, and MAY enrich `user` and `host` from the trailing welcome text.
 
 No retry counters. No pending action queues. No timers.
 
@@ -41,7 +41,6 @@ No retry counters. No pending action queues. No timers.
 | `904 ERR_SASLFAIL`    | Sending Payload | Error.                                                       |
 | `905 ERR_SASLTOOLONG` | Sending Payload | Error.                                                       |
 | `001 RPL_WELCOME`     | Any             | Record assigned nick. Set `registered`. Emit `registered`.   |
-| `004 RPL_MYINFO`      | Any             | Record informational server version.                         |
 
 ## Intentionally ignored messages
 
@@ -51,6 +50,7 @@ These messages may arrive during the machine's lifetime. We are aware of them an
 | -------------------------- | --------------------------------------------------------------------------------- |
 | `002 RPL_YOURHOST`         | Post-registration informational. Not our concern.                                 |
 | `003 RPL_CREATED`          | Post-registration informational. Not our concern.                                 |
+| `004 RPL_MYINFO`           | Post-registration informational. Not used by a built-in feature.                  |
 | `005 RPL_ISUPPORT`         | Post-registration informational. Not our concern.                                 |
 | `410 ERR_INVALIDCAPCMD`    | Server rejected an unknown CAP subcommand. We didn't send one. Ignore.            |
 | `432 ERR_ERRONEUSNICKNAME` | Nick rejected. Our state is unaffected — we already sent NICK. Consumer handles.  |
@@ -110,7 +110,7 @@ Each transition produces zero or more outbound messages:
 | `AUTHENTICATE +` → SendingPayload | `AUTHENTICATE <b64 PLAIN payload>` (chunked at 400 bytes) |
 | `903` → Done                      | `CAP END`                                                 |
 
-`001` and `004` do not drive the CAP/SASL sub-machine's phase changes. They are observed alongside it and update `runtime.connectionState` whenever they arrive.
+`001` does not drive the CAP/SASL sub-machine's phase changes. It is observed alongside it and updates `runtime.connectionState` whenever it arrives.
 
 Error transitions and self-loops produce no outbound messages. The machine stops.
 

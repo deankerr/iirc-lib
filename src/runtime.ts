@@ -41,7 +41,6 @@ export interface ConnectionState {
   registered: boolean
   nick: string
   serverHost?: string
-  serverVersion?: string
   account?: string
 }
 
