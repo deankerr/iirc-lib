@@ -227,13 +227,8 @@ server implements it slightly differently, and a client library's real job is
 normalization — turning inconsistent wire behaviour into a coherent, typed
 interface without pretending the protocol is simpler than it is.
 
-- **Observe the server, don't police it.** Record what the server says; when
-  something unexpected arrives, stay put and wait. No assertions about server
-  correctness.
 - **One canonical event stream.** Not an emitter per command. Every feature and
   every consumer subscribes to the same `event` stream.
-- **Capabilities are progressive enhancement.** Every IRCv3 capability also
-  works when absent — each one is isolated and composable.
 - **Terminal sessions.** One runtime, one transport, one session; error states
   are terminal. Reconnection is consumer policy.
 - **Small public surface.** No sprawling command-helper API and no false safety

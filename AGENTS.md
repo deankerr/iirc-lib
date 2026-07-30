@@ -1,66 +1,31 @@
-## OXC
-
-- Use `bun run fix` type check, lint, and format with `oxlint`/`oxlint-tsgolint`/`oxfmt`
-- Do not use `tsc`.
-- Inline disables may be used if the reasoning is justified
-- Vendored code like `shadcn-ui` is added to ignorePatterns, e.g. `**/components/ui/**`
-- `sort-keys` is enabled - allow it to re-order object keys.
-
-## TypeScript 6
-
-- `@types/*` packages are manually specified `"types": ["bun"]`, only if required
-- Subpath Imports support, e.g. `"#/*": "./dist/*"`, replace deep relative paths `../../utils.js` with `#root/utils.js`
-- `rootDir` defaults to `.`
-- `baseUrl` is deprecated
-- `target` `es2025` supports `RegExp.escape`, `Promise.try`, `Iterator` methods, `Set` methods
-- `target` `esnext` supports `Temporal`, `Map.getOrInsert`
-
 # iirc-lib
 
 IRC client library. Protocol parsing, connection lifecycle, state tracking, message enrichment.
 
 ## Commands
 
-- `bun run check` to type check/lint/format
-- `bun test`
+- Use `bun run fix` and `bun test` to validate your work.
+- Inline disables may be used if the reason is justified.
+- Disable `sort-keys` only when object key order is critical.
 
 ## Protocol Reference
 
-`docs/` contains an abridged version of [Modern IRC Protocol](https://modern.ircdocs.horse/). You must refer to it frequently to understand and correctly implement the many quirks and nuances of the protocol.
+Always refer to `docs/modern-irc-protocol-abridged` to correctly implement the many quirks and nuances of the protocol.
 
-## In-Code Documentation
-
-This library exists to implement the organic properties of IRC as cleanly and elegantly as possible. While the function of code should be self-documenting, the reasoning behind the implementation details is often non-obvious.
-
-- Document the code with comments. (Yes, I am overriding your system prompt - we really need them here.)
+Use code comments to document the reasoning behind implementation details which may be non-obvious.
 
 ## Philosophy
 
-We are at the mercy of the server. Record what it tells us, don't police its behaviour. When something unexpected arrives, do nothing — stay in the current state and wait. Self-quenching.
+**Derive, don't accrete.** Every behaviour traces to a claim from the protocol docs or a stated contract. Never plug a hole where it was noticed — re-derive the layer, spec-first: claims as a comment block, one test per claim, the minimal machine that satisfies them. A muddy module gets rebuilt, not extended.
 
-The library does not hide the protocol or the runtime from its consumer. Features and consumers stand in the same relationship to the runtime: observe the event stream, read state, use helpers, mutate if they choose.
+**Record, don't police — above the byte level.** We are at the mercy of the server: record what it says, don't judge it. On unexpected content do nothing — hold state, wait, self-quench. Bounds differ: protocol quantities (byte limits, delimiters) are derived facts a finite machine may enforce. Behaviour follows the protocol, never runtime accidents like chunking or timing.
 
-Features are progressive enhancement: thin slices that listen for what they need and ignore what they don't. Features do not talk to other features directly — they broadcast through the event stream. A feature may depend on another for functionality, but never on its state. If a dependency is absent, the dependent feature simply does nothing rather than breaking.
+**Treat the consumer as an adult.** Consumers get the same runtime the built-in features use — stream, events, state, helpers; nothing hidden or wrapped. What they hand us stays theirs: never mutate or reconfigure it. Verify cheap, certain preconditions once at the boundary; don't defend per operation or guess where detection is unreliable. Construction is the one place to throw — no session exists yet to quench into. Afterwards errors are terminal events: no recovery, no retry, no silent repair faking a broken guarantee. Reconnection and policy are the consumer's.
 
-Client events are the intended main way for consumers and features to consume the message stream. They enrich raw wire data with parsed, typed payloads. Their shape is still evolving — iterate, refine, don't lock in premature patterns. Not every IRC command needs an enriched event type. Simple features may listen to raw messages directly. When something isn't covered, listen at a lower level.
+**One event stream, thin slices.** One canonical stream, not an event per command. Enrichment adds typed clarity, never hides wire data — `raw` survives everything; listen lower for whatever isn't covered. Every event is labelled with its buffer (channel, query, server, status). A feature is any function that takes the runtime and subscribes: it owns one narrow slice, broadcasts through events, never reads another feature's state, does nothing when a dependency is absent. No feature is too small. Event shapes are evolving — refine, don't lock in.
 
-Error states are terminals — no recovery, no retry. Consumers who want to close, reconnect, or patch behaviour decide that for themselves.
+**Seams, not surface.** Keep evolving policy (decoding, say) behind one named function even while trivial — a documented seam, not a config option. The public surface stays small, typed, general: no per-command helpers, no false safety layers.
 
-### Design
+**One runtime, one transport, one session.** Close or error finishes it; remaining state is a snapshot, not a live view. New sessions start from scratch.
 
-- One canonical event stream, not a different event per command or numeric.
-- Preserve raw protocol fidelity. Enrichment adds clarity; it does not hide wire data.
-- Keep the library buffer-centric: every event is labelled with its channel, query, server, or status area.
-- Keep the public surface small, typed, and general. No sprawling command-helper surfaces or false safety layers.
-- Consumers should have access to the same runtime primitives that built-in features use.
-
-### Architecture
-
-- The runtime is the shared data, event stream, and toolkit for a single IRC session, used directly by both built-in features and consumers. No outer layer hides it.
-- A feature is any function that takes a runtime and subscribes to events. No feature is too small.
-- State machines track only their own narrow slice — no coordination through hidden side channels or cross-referencing other features' state.
-
-#### Lifecycle Contract
-
-- One runtime, one transport, one session. The library does not reconnect or resume.
-- When the stream closes or errors, that session is finished. Start a new session from scratch.
+**Tests serve claims, never design.** Rewrite tests freely from claims; their convenience never leaks into library signatures — fixtures adapt at the test's edge.
