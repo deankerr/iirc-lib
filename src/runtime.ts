@@ -6,7 +6,7 @@ import type { RuntimeConfig, RuntimeInputConfig } from './config'
 import { resolveConfig } from './config'
 import type { IrcEvent } from './events'
 import { buildEvent } from './events'
-import type { Channel } from './features/channel-tracker'
+import type { Channel, ChannelJSON } from './features/channel-tracker'
 import { channelTracker } from './features/channel-tracker'
 import { identity } from './features/identity'
 import { IsupportMap, isupport } from './features/isupport'
@@ -42,6 +42,16 @@ export interface ConnectionState {
   nick: string
   serverHost?: string
   account?: string
+}
+
+// The runtime's public properties as plain JSON-safe data. Transport is a live
+// stream-owning object, so it cannot be represented as session data.
+export interface RuntimeJSON {
+  activeCaps: string[]
+  channels: ChannelJSON[]
+  config: RuntimeConfig
+  connectionState: ConnectionState
+  isupport: Record<string, string | true>
 }
 
 export interface ParsedSource {
@@ -133,6 +143,24 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
     }
 
     this.transport.send(commandOrMessage)
+  }
+
+  // State as data, copied at one instant. Maps and sets do not survive
+  // JSON.stringify, and a live view of a finished session misleads, so the
+  // result never holds a reference into runtime state. Transport is excluded
+  // because it owns the live stream rather than representing session data.
+  toJSON(): RuntimeJSON {
+    return {
+      activeCaps: [...this.activeCaps],
+      channels: [...this.channels.values()].map((channel) => channel.toJSON()),
+      config: {
+        ...this.config,
+        requestedCapabilities: [...this.config.requestedCapabilities],
+        ...(this.config.sasl !== undefined && { sasl: { ...this.config.sasl } }),
+      },
+      connectionState: { ...this.connectionState },
+      isupport: this.isupport.toJSON(),
+    }
   }
 
   // Fold a value using the active server CASEMAPPING when available so

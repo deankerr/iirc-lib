@@ -121,6 +121,13 @@ export class IsupportMap {
     this.recomputeAll()
   }
 
+  // Only the parameters the server actually advertised. Defaults are not
+  // merged in: a snapshot records what was said, and the defaults are already
+  // in this class.
+  toJSON(): Record<string, string | true> {
+    return Object.fromEntries(this.values)
+  }
+
   // --- Private ---
 
   private recompute(key: string): void {

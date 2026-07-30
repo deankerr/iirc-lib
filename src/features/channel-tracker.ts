@@ -11,6 +11,18 @@ export interface ChannelMember {
   nick: string
 }
 
+// One channel as plain JSON-safe data. Member modes are not repeated here:
+// they are already in `modes`, keyed by mode letter, and duplicating them
+// would be two records of one fact.
+export interface ChannelJSON {
+  createdAt?: string
+  joined: boolean
+  members: string[]
+  modes: Record<string, string[]>
+  name: string
+  topic?: ChannelTopic
+}
+
 export class Channel {
   readonly members: CaseFoldMap<ChannelMember>
   // Each mode letter maps to the set of arguments associated with it.
@@ -80,6 +92,17 @@ export class Channel {
     // Clean up any prefix mode entries for this nick.
     for (const args of this.modes.values()) {
       args.delete(nick)
+    }
+  }
+
+  toJSON(): ChannelJSON {
+    return {
+      ...(this.createdAt !== undefined && { createdAt: this.createdAt }),
+      joined: this.joined,
+      members: [...this.members.keys()],
+      modes: Object.fromEntries([...this.modes].map(([mode, args]) => [mode, [...args]])),
+      name: this.name,
+      ...(this.topic !== undefined && { topic: { ...this.topic } }),
     }
   }
 

@@ -216,6 +216,73 @@ describe('Runtime', () => {
     expect(transport.sentLines).toEqual(['PRIVMSG #dev :hello world'])
   })
 
+  // A snapshot is a copy of state as data, so it survives JSON.stringify and
+  // does not change when the session continues.
+  test('toJSON returns every public property except Transport as plain data', () => {
+    const transport = createMockTransport()
+    const runtime = createRuntime(
+      {
+        nick: 'bot',
+        sendDelayMs: 0,
+      },
+      transport.stream,
+    )
+
+    runtime.register()
+
+    transport.receive([
+      ':server 001 bot :Welcome',
+      ':server 005 bot CHANTYPES=# NETWORK=demo :are supported by this server',
+      ':bot!bot@host JOIN #dev',
+      ':server 353 bot = #dev :@bot +ann',
+      ':server 366 bot #dev :End of /NAMES list',
+    ])
+
+    const json = runtime.toJSON()
+
+    expect(json).toEqual({
+      activeCaps: [],
+      channels: [
+        {
+          joined: true,
+          members: ['bot', 'ann'],
+          modes: { o: ['bot'], v: ['ann'] },
+          name: '#dev',
+        },
+      ],
+      config: {
+        nick: 'bot',
+        realname: 'bot',
+        requestedCapabilities: [],
+        sendDelayMs: 0,
+        user: 'bot',
+      },
+      connectionState: {
+        nick: 'bot',
+        realname: 'bot',
+        registered: true,
+        serverHost: 'server',
+        user: 'bot',
+      },
+      isupport: { CHANTYPES: '#', NETWORK: 'demo' },
+    })
+    expect(json.channels).toEqual([
+      {
+        joined: true,
+        members: ['bot', 'ann'],
+        modes: { o: ['bot'], v: ['ann'] },
+        name: '#dev',
+      },
+    ])
+    // The JSON round trip exercises Runtime.toJSON; it is not being used to clone.
+    // oxlint-disable-next-line unicorn/prefer-structured-clone
+    expect(JSON.parse(JSON.stringify(runtime))).toEqual(json)
+
+    // The copy does not follow later state changes.
+    transport.receive(':ann!ann@host PART #dev')
+    expect(json.channels[0]?.members).toEqual(['bot', 'ann'])
+  })
+
   test('send also accepts canonical command objects', () => {
     const transport = createMockTransport()
     const runtime = createRuntime(
