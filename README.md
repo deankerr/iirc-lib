@@ -72,15 +72,15 @@ options, extra listeners, pipes) remains under your control.
 `createRuntime` validates its config at the boundary and fails loudly on bad
 input. Only `nick` is required.
 
-| Option                  | Type                             | Default            | Notes                                                       |
-| ----------------------- | -------------------------------- | ------------------ | ----------------------------------------------------------- |
-| `nick`                  | `string`                         | —                  | Required.                                                   |
-| `user`                  | `string`                         | `nick`             | Username sent in the `USER` command.                        |
-| `realname`              | `string`                         | `nick`             | Realname / gecos field.                                     |
-| `password`              | `string`                         | —                  | Server password (`PASS`), not SASL.                         |
-| `sasl`                  | `{ username: string; password }` | —                  | Enables SASL PLAIN and auto-requests the `sasl` capability. |
-| `sendDelayMs`           | `number`                         | `1500`             | Minimum delay between outbound lines (flood protection).    |
-| `requestedCapabilities` | `string[]`                       | `['message-tags']` | Extra capabilities to request; merged over the defaults.    |
+| Option                  | Type                             | Default | Notes                                                       |
+| ----------------------- | -------------------------------- | ------- | ----------------------------------------------------------- |
+| `nick`                  | `string`                         | —       | Required.                                                   |
+| `user`                  | `string`                         | `nick`  | Username sent in the `USER` command.                        |
+| `realname`              | `string`                         | `nick`  | Realname / gecos field.                                     |
+| `password`              | `string`                         | —       | Server password (`PASS`), not SASL.                         |
+| `sasl`                  | `{ username: string; password }` | —       | Enables SASL PLAIN and auto-requests the `sasl` capability. |
+| `sendDelayMs`           | `number`                         | `1500`  | Minimum delay between outbound lines (flood protection).    |
+| `requestedCapabilities` | `string[]`                       | —       | Extra capabilities to request; merged over the defaults.    |
 
 ```ts
 const runtime = createRuntime(

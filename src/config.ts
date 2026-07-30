@@ -30,7 +30,7 @@ export interface RuntimeConfig {
 }
 
 const DEFAULT_DELAYMS = 1500
-const DEFAULT_CAPABILITIES = ['message-tags']
+const DEFAULT_CAPABILITIES: string[] = []
 
 // Fail loudly at the boundary: a bad config should throw here with a clear
 // message, not surface as a cryptic server rejection mid-registration.
@@ -107,9 +107,9 @@ export function resolveConfig(input: RuntimeInputConfig): RuntimeConfig {
 
   const sasl = resolveSasl(input.sasl)
 
-  // Consumer capabilities merge over the defaults rather than replacing them:
-  // the default set backs the library's own enrichment (message-tags), and
-  // losing it silently would degrade events.
+  // The library requests no capabilities of its own: enrichment reads whatever
+  // the consumer negotiated and stays quiet otherwise. Consumer capabilities
+  // merge over the (currently empty) default set and are de-duplicated.
   const requestedCapabilities = [...DEFAULT_CAPABILITIES]
   if (input.requestedCapabilities !== undefined) {
     if (!Array.isArray(input.requestedCapabilities)) {

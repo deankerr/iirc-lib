@@ -11,7 +11,7 @@ describe('resolveConfig', () => {
     expect(config.realname).toBe('bot')
     expect(config.password).toBeUndefined()
     expect(config.sendDelayMs).toBe(1500)
-    expect(config.requestedCapabilities).toEqual(['message-tags'])
+    expect(config.requestedCapabilities).toEqual([])
     expect(config.sasl).toBeUndefined()
   })
 
@@ -30,7 +30,7 @@ describe('resolveConfig', () => {
     expect(config.realname).toBe('My Bot')
     expect(config.password).toBe('secret')
     expect(config.sendDelayMs).toBe(200)
-    expect(config.requestedCapabilities).toEqual(['message-tags', 'sasl'])
+    expect(config.requestedCapabilities).toEqual(['sasl'])
     expect(config.sasl).toEqual({ password: 'pw', username: 'me' })
   })
 
@@ -75,22 +75,25 @@ describe('resolveConfig', () => {
     )
   })
 
-  test('merges requestedCapabilities over the defaults', () => {
-    const config = resolveConfig({ nick: 'bot', requestedCapabilities: ['server-time'] })
-    expect(config.requestedCapabilities).toEqual(['message-tags', 'server-time'])
-  })
-
-  test('does not duplicate default capabilities', () => {
+  test('keeps requestedCapabilities in the order given', () => {
     const config = resolveConfig({
       nick: 'bot',
-      requestedCapabilities: ['message-tags', 'server-time'],
+      requestedCapabilities: ['server-time', 'message-tags'],
+    })
+    expect(config.requestedCapabilities).toEqual(['server-time', 'message-tags'])
+  })
+
+  test('does not duplicate a repeated capability', () => {
+    const config = resolveConfig({
+      nick: 'bot',
+      requestedCapabilities: ['message-tags', 'server-time', 'message-tags'],
     })
     expect(config.requestedCapabilities).toEqual(['message-tags', 'server-time'])
   })
 
   test('trims and drops empty requested capabilities', () => {
     const config = resolveConfig({ nick: 'bot', requestedCapabilities: [' server-time ', '  '] })
-    expect(config.requestedCapabilities).toEqual(['message-tags', 'server-time'])
+    expect(config.requestedCapabilities).toEqual(['server-time'])
   })
 
   test('auto-adds sasl capability when sasl config is provided', () => {
@@ -101,9 +104,10 @@ describe('resolveConfig', () => {
     expect(config.requestedCapabilities).toContain('sasl')
   })
 
-  test('does not duplicate sasl capability if already in defaults', () => {
+  test('does not duplicate sasl capability if already requested', () => {
     const config = resolveConfig({
       nick: 'bot',
+      requestedCapabilities: ['sasl'],
       sasl: { password: 'pw', username: 'me' },
     })
     const saslCount = config.requestedCapabilities.filter((c) => c === 'sasl').length

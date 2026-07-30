@@ -143,9 +143,9 @@ Current behaviour:
   `event.raw`.
 - No connection, identity, or channel state is inferred from these messages.
 
-This fallback is intentional, but `TAGMSG` is a notable omission because the
-library requests `message-tags` by default. Enriching `TAGMSG` with its target,
-and enriching `396` if displayed-host state becomes part of the runtime, would
+This fallback is intentional, but `TAGMSG` is a notable omission if
+`message-tags` is requested. Enriching `TAGMSG` with its target, and
+enriching `396` if displayed-host state becomes part of the runtime, would
 be general additions rather than implementation-specific recovery.
 
 ## Channel State After a Terminal Close

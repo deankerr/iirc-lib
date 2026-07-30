@@ -61,9 +61,10 @@ describe('registration', () => {
       expect(sentLines).toEqual(['CAP END'])
     })
 
-    test('requests available caps from default list and ends on ACK', () => {
-      // Default requestedCapabilities is ['message-tags'].
-      const { transport, sentLines } = createHarness()
+    test('requests available caps from the requested list and ends on ACK', () => {
+      const { transport, sentLines } = createHarness({
+        requestedCapabilities: ['message-tags'],
+      })
 
       transport.receive(capLs('testbot', 'message-tags'))
 
@@ -76,9 +77,11 @@ describe('registration', () => {
     })
 
     test('filters requested caps to those advertised by the server', () => {
-      // Default is ['message-tags']. Server only advertises sasl.
+      // We request message-tags; the server only advertises sasl.
       // Intersection is empty → CAP END immediately.
-      const { transport, sentLines } = createHarness()
+      const { transport, sentLines } = createHarness({
+        requestedCapabilities: ['message-tags'],
+      })
 
       transport.receive(capLs('testbot', 'sasl'))
 
@@ -86,7 +89,9 @@ describe('registration', () => {
     })
 
     test('CAP NAK sends CAP END and stops processing', () => {
-      const { transport, sentLines, errors } = createHarness()
+      const { transport, sentLines, errors } = createHarness({
+        requestedCapabilities: ['message-tags'],
+      })
 
       transport.receive(capLs('testbot', 'message-tags'))
       sentLines.length = 0
@@ -101,6 +106,7 @@ describe('registration', () => {
   describe('CAP continuation lines', () => {
     test('accumulates multi-line CAP LS before requesting', () => {
       const { transport, sentLines } = createHarness({
+        requestedCapabilities: ['message-tags'],
         sasl: { password: 'hunter2', username: 'bot' },
       })
 
@@ -117,6 +123,7 @@ describe('registration', () => {
   describe('SASL PLAIN happy path', () => {
     test('full SASL PLAIN flow', () => {
       const { transport, sentLines, runtime } = createHarness({
+        requestedCapabilities: ['message-tags'],
         sasl: { password: 'sesame', username: 'jilles' },
       })
 
@@ -148,6 +155,7 @@ describe('registration', () => {
       // of requested caps with available caps won't include sasl, so no
       // SASL flow occurs → CAP END immediately after ACK.
       const { transport, sentLines } = createHarness({
+        requestedCapabilities: ['message-tags'],
         sasl: { password: 'pw', username: 'bot' },
       })
 
@@ -163,10 +171,11 @@ describe('registration', () => {
     test('sasl capability ACKed but sasl config missing from runtime', () => {
       // Without sasl config, auto-include doesn't add 'sasl' to requested
       // caps. Server advertises sasl but we don't request it.
-      const { transport, sentLines } = createHarness()
+      const { transport, sentLines } = createHarness({
+        requestedCapabilities: ['message-tags'],
+      })
 
       transport.receive(capLs('testbot', 'message-tags sasl'))
-      // Default config only requests message-tags (no sasl config → no auto-include).
       expect(sentLines).toEqual(['CAP REQ message-tags'])
 
       sentLines.length = 0
@@ -353,9 +362,9 @@ describe('registration', () => {
       })
 
       // Full happy path to done.
-      transport.receive(capLs('testbot', 'message-tags sasl'))
+      transport.receive(capLs('testbot', 'sasl'))
       sentLines.length = 0
-      transport.receive(capAck('testbot', 'message-tags sasl'))
+      transport.receive(capAck('testbot', 'sasl'))
       sentLines.length = 0
       transport.receive('AUTHENTICATE +')
       sentLines.length = 0
@@ -413,15 +422,16 @@ describe('registration', () => {
         sasl: { password: 'pw', username: 'bot' },
       })
 
-      // sasl=PLAIN,EXTERNAL → stripped to "sasl" for matching.
-      // Server only advertises sasl (not message-tags), so intersection
-      // of ['message-tags', 'sasl'] ∩ {sasl} = ['sasl'].
+      // sasl=PLAIN,EXTERNAL → stripped to "sasl" for matching. Requested caps
+      // are ['sasl'] (auto-included), so the intersection is ['sasl'].
       transport.receive(capLs('testbot', 'sasl=PLAIN,EXTERNAL'))
       expect(sentLines).toEqual(['CAP REQ sasl'])
     })
 
     test('ACK caps with dash prefix are handled as disabled', () => {
-      const { transport, sentLines, runtime } = createHarness()
+      const { transport, sentLines, runtime } = createHarness({
+        requestedCapabilities: ['message-tags'],
+      })
 
       transport.receive(capLs('testbot', 'message-tags'))
 
