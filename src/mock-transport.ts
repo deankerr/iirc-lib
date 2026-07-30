@@ -30,7 +30,8 @@ export function createMockTransport() {
     receive(lines: string | readonly string[]) {
       const batch = Array.isArray(lines) ? lines : [lines]
       for (const line of batch) {
-        stream.emit('data', `${line}\r\n`)
+        // A real socket in binary mode delivers bytes, so the mock does too.
+        stream.emit('data', Buffer.from(`${line}\r\n`, 'utf-8'))
       }
     },
 

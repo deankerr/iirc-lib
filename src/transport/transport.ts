@@ -28,7 +28,7 @@ export class Transport extends EventEmitter<TransportEvents> {
   readonly stream: Duplex
   private transportOk = true
 
-  private readonly handleDataRef = (chunk: string) => {
+  private readonly handleDataRef = (chunk: Uint8Array | string) => {
     this.handleChunk(chunk)
   }
 
@@ -43,6 +43,15 @@ export class Transport extends EventEmitter<TransportEvents> {
   constructor(stream: Duplex, options: { sendDelayMs: number }) {
     super()
 
+    // The transport does not own its stream — the consumer creates it and can
+    // keep using it. Byte framing is only sound on a binary readable, so that
+    // single precondition is verified here, before any session exists. This is
+    // the one place the library throws: there is no session yet to quench
+    // into.
+    if (stream.readableObjectMode || stream.readableEncoding !== null) {
+      throw new Error('Transport requires a binary stream (no readableEncoding, no objectMode)')
+    }
+
     this.stream = stream
     this.outputQueue = new OutputQueue(
       (line) => {
@@ -53,7 +62,6 @@ export class Transport extends EventEmitter<TransportEvents> {
       },
     )
 
-    stream.setEncoding('utf-8')
     stream.on('data', this.handleDataRef)
     stream.on('close', this.handleCloseRef)
     stream.on('error', this.handleErrorRef)
@@ -67,24 +75,33 @@ export class Transport extends EventEmitter<TransportEvents> {
     this.outputQueue.enqueue(encodeCommand(command))
   }
 
-  private handleChunk(chunk: string): void {
-    const { lines, overflowExcerpt } = this.inputBuffer.push(chunk)
-
-    if (overflowExcerpt !== undefined) {
-      this.emit(
-        'parse_error',
-        overflowExcerpt,
-        new Error('IRC line exceeded maximum length and was discarded'),
-      )
+  private handleChunk(chunk: Uint8Array | string): void {
+    // The session is terminal after close or error; late chunks are noise.
+    if (!this.transportOk) {
+      return
     }
 
-    for (const line of lines) {
-      if (line.length === 0) {
+    // A string chunk means the consumer set an encoding on the stream after
+    // construction. The byte contract is broken, and the session with it —
+    // silently re-encoding would fake a byte fidelity we no longer have.
+    if (typeof chunk === 'string') {
+      this.handleError(new Error('Transport stream emitted a string; a binary stream is required'))
+      return
+    }
+
+    for (const frame of this.inputBuffer.push(chunk)) {
+      if (frame.type === 'overflow') {
+        this.emit(
+          'parse_error',
+          decodeLine(frame.excerpt),
+          new Error('IRC line exceeded maximum length and was discarded'),
+        )
         continue
       }
 
-      // Emit the raw inbound IRC line before parsing so observers can see
-      // exactly what arrived off the wire.
+      // Framing and protocol limits are byte concerns. Once a complete line
+      // is isolated, the rest of the transport follows one string-based flow.
+      const line = decodeLine(frame.bytes)
       this.emit('read', line)
 
       let message: IrcMessage
@@ -125,4 +142,13 @@ export class Transport extends EventEmitter<TransportEvents> {
     this.outputQueue.clear()
     this.transportOk = false
   }
+}
+
+// Decoding is a policy applied per complete line — the single seam where a
+// legacy-encoding fallback or a consumer-supplied codec would slot in. Today
+// the policy is UTF-8 with invalid sequences replaced by U+FFFD.
+const utf8Decoder = new TextDecoder()
+
+function decodeLine(bytes: Uint8Array): string {
+  return utf8Decoder.decode(bytes)
 }

@@ -61,6 +61,12 @@ socket.on('secureConnect', () => runtime.register())
 Because the transport is just a stream, tests can drive a full session against
 an in-memory `Duplex` with no network at all.
 
+The stream stays yours, with one contract: it must be a binary byte stream. Do
+not call `setEncoding()` and do not use `objectMode` — IRC line limits are byte
+limits, and framing is only sound on bytes, so construction verifies this once
+and throws otherwise. Everything else about the stream (pausing, lifecycle
+options, extra listeners, pipes) remains under your control.
+
 ## Configuration
 
 `createRuntime` validates its config at the boundary and fails loudly on bad
@@ -121,7 +127,7 @@ Every event carries:
   `RPL_WELCOME`); ~140 commands and replies have typed payloads.
 - `from` — the parsed source: `{ name, user?, host?, isSelf }`.
 - `raw` — the untouched `IrcMessage` (`{ tags, source, command, params }`).
-  Enrichment never discards wire data; drop down to `raw` for anything the
+  Enrichment never discards protocol data; drop down to `raw` for anything the
   enricher didn't surface.
 
 Unrecognized commands arrive as an `UNKNOWN` event with the raw message intact,
@@ -151,6 +157,10 @@ runtime.activeCaps // Set<string> of negotiated capabilities
 runtime.channels // case-folded map of joined channels → members, modes, topic
 runtime.transport // the wire boundary — emits every raw line in and out
 ```
+
+The transport frames and length-checks inbound data as bytes, then decodes each
+complete line as UTF-8. Above that boundary, lines, messages, and events remain
+one focused string-based flow.
 
 ## Protocol helpers
 
@@ -241,10 +251,13 @@ interface without pretending the protocol is simpler than it is.
 bun test
 ```
 
-175 tests across the parser, encoder, transport framing, runtime, and stateful
-features, largely table-driven against protocol fixtures. `docs/` contains an
-abridged copy of the [Modern IRC](https://modern.ircdocs.horse/) spec the
-implementation was written against.
+The test suite covers the parser, encoder, transport framing, runtime, and
+stateful features, largely table-driven against protocol fixtures. `docs/`
+contains an abridged copy of the
+[Modern IRC](https://modern.ircdocs.horse/) spec the implementation was written
+against. [Known interoperability issues](docs/known-issues.md) records
+anonymised examples of observed server deviations and the library's current
+behaviour around them.
 
 ## License
 

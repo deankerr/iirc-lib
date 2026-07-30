@@ -1,73 +1,159 @@
 import { describe, expect, test } from 'bun:test'
 
 import { InputBuffer } from './input-buffer'
+import type { InputFrame } from './input-buffer'
 
-// 8703 per the buffer's protocol limit; anything longer must trip the guard.
-const OVERSIZED = 'x'.repeat(9000)
+// Fixtures are authored as text and encoded at the edge; the framer itself
+// only ever sees bytes.
+const encoder = new TextEncoder()
+const decoder = new TextDecoder()
 
-// The unbounded-growth regression is about internal state, so these tests
-// peek at the private buffer to assert discarding actually happens.
-function bufferContents(buffer: InputBuffer): string {
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  return (buffer as unknown as { buffer: string }).buffer
+function bytes(text: string): Uint8Array {
+  return encoder.encode(text)
 }
 
+function lineFrame(text: string): InputFrame {
+  return { bytes: bytes(text), type: 'line' }
+}
+
+function overflowFrame(text: string): InputFrame {
+  return { excerpt: bytes(text), type: 'overflow' }
+}
+
+// The protocol maximum: 8701 content bytes once CRLF is stripped.
+const MAX_LINE = 'x'.repeat(8701)
+const OVERSIZED = 'x'.repeat(9000)
+
 describe('InputBuffer', () => {
-  test('splits complete lines and strips CR', () => {
+  // Claim 1: messages are separated by CRLF; bare LF is tolerated.
+  test('splits lines on CRLF and strips the CR', () => {
     const buffer = new InputBuffer()
-    expect(buffer.push('PING :a\r\nPING :b\n').lines).toEqual(['PING :a', 'PING :b'])
+    expect(buffer.push(bytes('PING :a\r\nPING :b\r\n'))).toEqual([
+      lineFrame('PING :a'),
+      lineFrame('PING :b'),
+    ])
   })
 
-  test('holds a partial line until its newline arrives', () => {
+  test('tolerates a bare LF as the delimiter', () => {
     const buffer = new InputBuffer()
-    expect(buffer.push('PING :to').lines).toEqual([])
-    expect(buffer.push('ken\r\n').lines).toEqual(['PING :token'])
+    expect(buffer.push(bytes('PING :a\nPING :b\n'))).toEqual([
+      lineFrame('PING :a'),
+      lineFrame('PING :b'),
+    ])
   })
 
-  test('reports an oversized partial line once and discards it', () => {
+  test('keeps a CR that is not directly before the LF', () => {
     const buffer = new InputBuffer()
-    const result = buffer.push(OVERSIZED)
-
-    expect(result.lines).toEqual([])
-    expect(result.overflowExcerpt).toBe('x'.repeat(100))
-    expect(bufferContents(buffer)).toBe('')
+    expect(buffer.push(bytes('PING :a\rb\r\n'))).toEqual([lineFrame('PING :a\rb')])
   })
 
-  test('discards further chunks while skipping instead of accumulating them', () => {
+  // Claim 2: data buffers until the delimiter arrives.
+  test('holds a partial line until its LF arrives', () => {
     const buffer = new InputBuffer()
-    buffer.push(OVERSIZED)
-
-    // Still no newline: the oversized line continues. Nothing may buffer up,
-    // and the overflow must not be re-reported.
-    const result = buffer.push(OVERSIZED)
-    expect(result.lines).toEqual([])
-    expect(result.overflowExcerpt).toBeUndefined()
-    expect(bufferContents(buffer)).toBe('')
+    expect(buffer.push(bytes('PING :to'))).toEqual([])
+    expect(buffer.push(bytes('ken\r\n'))).toEqual([lineFrame('PING :token')])
   })
 
-  test('resumes normal parsing after the oversized line terminates', () => {
+  // Claim 3: empty messages are silently ignored.
+  test('produces nothing for empty lines', () => {
     const buffer = new InputBuffer()
-    buffer.push(OVERSIZED)
-    buffer.push(OVERSIZED)
-
-    const result = buffer.push('tail-of-junk\r\nPING :alive\r\n')
-    expect(result.lines).toEqual(['PING :alive'])
-    expect(result.overflowExcerpt).toBeUndefined()
+    expect(buffer.push(bytes('\r\n\n\r\nPING :a\r\n\r\n'))).toEqual([lineFrame('PING :a')])
   })
 
-  test('an oversized line delivered with its newline in one chunk still parses', () => {
-    // The guard only applies to unterminated partials; a complete line is
-    // recorded as the server sent it, however long.
+  // Claim 4: 8701 content bytes is the most a valid line can carry.
+  test('accepts a maximum-length line', () => {
     const buffer = new InputBuffer()
-    const result = buffer.push(`${OVERSIZED}\r\nPING :next\r\n`)
-    expect(result.lines).toEqual([OVERSIZED, 'PING :next'])
+    expect(buffer.push(bytes(`${MAX_LINE}\r\n`))).toEqual([lineFrame(MAX_LINE)])
   })
 
-  test('clear() resets skipping state', () => {
+  test('accepts a maximum-length line split between CR and LF', () => {
     const buffer = new InputBuffer()
-    buffer.push(OVERSIZED)
+    expect(buffer.push(bytes(`${MAX_LINE}\r`))).toEqual([])
+    expect(buffer.push(bytes('\n'))).toEqual([lineFrame(MAX_LINE)])
+  })
+
+  test('rejects a line one byte over the maximum', () => {
+    const buffer = new InputBuffer()
+    expect(buffer.push(bytes(`${MAX_LINE}y\r\n`))).toEqual([overflowFrame('x'.repeat(100))])
+  })
+
+  test('reports an unterminated oversized line once, then discards until its LF', () => {
+    const buffer = new InputBuffer()
+
+    expect(buffer.push(bytes(OVERSIZED))).toEqual([overflowFrame('x'.repeat(100))])
+
+    // The line continues without an LF: nothing new may be reported.
+    expect(buffer.push(bytes(OVERSIZED))).toEqual([])
+
+    // The LF finally arrives; framing resumes with the next line.
+    expect(buffer.push(bytes('tail\r\nPING :alive\r\n'))).toEqual([lineFrame('PING :alive')])
+  })
+
+  test('preserves wire order across lines and overflows', () => {
+    const buffer = new InputBuffer()
+    const frames = buffer.push(
+      bytes(`PING :before\r\n${OVERSIZED}\r\n${'y'.repeat(9000)}\r\nPING :after\r\n`),
+    )
+
+    expect(frames).toEqual([
+      lineFrame('PING :before'),
+      overflowFrame('x'.repeat(100)),
+      overflowFrame('y'.repeat(100)),
+      lineFrame('PING :after'),
+    ])
+  })
+
+  // Claim 5: framing never decodes; bytes pass through untouched.
+  test('carries invalid UTF-8 bytes through unaltered', () => {
+    const buffer = new InputBuffer()
+    const wire = Uint8Array.from([0x50, 0x49, 0x4e, 0x47, 0x20, 0x3a, 0xff, 0x0d, 0x0a])
+
+    expect(buffer.push(wire)).toEqual([
+      { bytes: Uint8Array.from([0x50, 0x49, 0x4e, 0x47, 0x20, 0x3a, 0xff]), type: 'line' },
+    ])
+  })
+
+  // The claims hold however the stream slices the bytes.
+  test('produces identical frames for every chunking of the same bytes', () => {
+    const wire = bytes(`PING :a\r\n${MAX_LINE}\r\n\r\n${OVERSIZED}\r\nPING :b\r\n`)
+
+    const whole = new InputBuffer().push(wire).map(describeFrame)
+    expect(whole.length).toBeGreaterThan(0)
+
+    for (const chunkSize of [1, 7, 100, 8701, 8703]) {
+      const buffer = new InputBuffer()
+      const frames: InputFrame[] = []
+      for (let offset = 0; offset < wire.byteLength; offset += chunkSize) {
+        frames.push(...buffer.push(wire.slice(offset, offset + chunkSize)))
+      }
+      expect(frames.map(describeFrame)).toEqual(whole)
+    }
+  })
+
+  test('clear() resets the partial buffer and the skipping state', () => {
+    const buffer = new InputBuffer()
+    buffer.push(bytes(OVERSIZED))
     buffer.clear()
 
-    expect(buffer.push('PING :fresh\r\n').lines).toEqual(['PING :fresh'])
+    expect(buffer.push(bytes('PING :fresh\r\n'))).toEqual([lineFrame('PING :fresh')])
+  })
+
+  // Boundedness is an internal claim: observable frames cannot distinguish
+  // discarding from silent accumulation, so this one test inspects the
+  // private buffer directly.
+  test('never accumulates the bytes of an unterminated oversized line', () => {
+    const buffer = new InputBuffer()
+    buffer.push(bytes(OVERSIZED))
+    buffer.push(bytes(OVERSIZED))
+
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    const internal = (buffer as unknown as { buffer: Uint8Array }).buffer
+    expect(internal.byteLength).toBe(0)
   })
 })
+
+function describeFrame(frame: InputFrame): string {
+  return frame.type === 'line'
+    ? `line:${decoder.decode(frame.bytes)}`
+    : `overflow:${decoder.decode(frame.excerpt)}`
+}
