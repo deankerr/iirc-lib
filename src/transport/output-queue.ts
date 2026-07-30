@@ -27,13 +27,17 @@ export class OutputQueue {
     this.queue.push(line)
   }
 
-  clear(): void {
+  // Returns the lines that were still waiting, so the caller can report what
+  // the session lost instead of dropping them in silence.
+  clear(): string[] {
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = undefined
     }
 
+    const dropped = this.queue
     this.queue = []
+    return dropped
   }
 
   private drain(): void {

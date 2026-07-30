@@ -144,7 +144,7 @@ describe('Transport', () => {
     const transport = new Transport(mock.stream, { sendDelayMs: 0 })
     const events: string[] = []
 
-    transport.on('parse_error', (line) => {
+    transport.on('parse_error', (_error, line) => {
       events.push(`error:${line.slice(0, 1)}`)
     })
     transport.on('read', (line) => {
@@ -160,6 +160,106 @@ describe('Transport', () => {
     )
 
     expect(events).toEqual(['read:PING :before', 'error:x', 'error:y', 'read:PING :after'])
+  })
+
+  // Decoding happens above framing, so a read must also carry the bytes it
+  // came from: they are the only record of what the server really sent.
+  test('emits the framed bytes alongside the decoded line', () => {
+    const mock = createMockTransport()
+    const transport = new Transport(mock.stream, { sendDelayMs: 0 })
+    let frame: Uint8Array | undefined
+
+    transport.on('read', (_line, bytes) => {
+      frame = bytes
+    })
+
+    const invalid = Buffer.concat([
+      Buffer.from(':server PRIVMSG me :Ol', 'ascii'),
+      Buffer.from([0xe1]),
+      Buffer.from('\r\n', 'ascii'),
+    ])
+    mock.stream.emit('data', invalid)
+
+    // The replacement character in the decoded line is not reversible; the
+    // original byte is only recoverable from the frame.
+    expect(frame?.at(-1)).toBe(0xe1)
+    expect(frame?.byteLength).toBe(invalid.byteLength - 2)
+  })
+
+  test('emits the framed bytes alongside a parse error', () => {
+    const mock = createMockTransport()
+    const transport = new Transport(mock.stream, { sendDelayMs: 0 })
+    let frame: Uint8Array | undefined
+
+    transport.on('parse_error', (_line, _error, bytes) => {
+      frame = bytes
+    })
+
+    mock.receive(':server')
+
+    expect(frame && Buffer.from(frame).toString('utf-8')).toBe(':server')
+  })
+
+  // Sends carry bytes for the same reason reads do. The delimiter is part of
+  // them, so the length an observer records is the length that was sent.
+  test('emits the encoded bytes alongside the written line', () => {
+    const mock = createMockTransport()
+    const transport = new Transport(mock.stream, { sendDelayMs: 0 })
+    let written: { bytes: Uint8Array; line: string } | undefined
+
+    transport.on('write', (line, bytes) => {
+      written = { bytes, line }
+    })
+
+    transport.send({ command: 'PRIVMSG', params: ['#demo', 'héllo there'] })
+
+    expect(written?.line).toBe('PRIVMSG #demo :héllo there')
+    expect(Buffer.from(written?.bytes ?? []).toString('utf-8')).toBe(
+      'PRIVMSG #demo :héllo there\r\n',
+    )
+    // 'é' is two bytes: a consumer counting characters would miss the limit.
+    expect(written?.bytes.byteLength).toBe(written === undefined ? -1 : written.line.length + 3)
+  })
+
+  // An emitted frame is a copy the transport does not keep, so a consumer may
+  // hold it. Reusing one chunk buffer for later data must not rewrite it.
+  test('emitted bytes do not alias the stream chunk', () => {
+    const mock = createMockTransport()
+    const transport = new Transport(mock.stream, { sendDelayMs: 0 })
+    const frames: Uint8Array[] = []
+
+    transport.on('read', (_line, bytes) => {
+      frames.push(bytes)
+    })
+
+    const chunk = Buffer.from('PING :a\r\n')
+    mock.stream.emit('data', chunk)
+    chunk.fill(0x58)
+    mock.stream.emit('data', Buffer.from('PING :b\r\n'))
+
+    expect(frames.map((bytes) => Buffer.from(bytes).toString('utf-8'))).toEqual([
+      'PING :a',
+      'PING :b',
+    ])
+  })
+
+  // A queued line that never reached the stream is not a sent command.
+  test('reports queued lines that the terminal session dropped', () => {
+    const mock = createMockTransport()
+    const transport = new Transport(mock.stream, { sendDelayMs: 50 })
+    let dropped: string[] | undefined
+
+    transport.on('discard', (lines) => {
+      dropped = lines
+    })
+
+    transport.send({ command: 'PING', params: ['first'] })
+    transport.send({ command: 'PING', params: ['second'] })
+    transport.send({ command: 'QUIT', params: ['so long'] })
+    mock.close()
+
+    expect(mock.sentLines).toEqual(['PING first'])
+    expect(dropped).toEqual(['PING second', 'QUIT :so long'])
   })
 
   test('emits nothing for empty lines', () => {
