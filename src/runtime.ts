@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 
 import { CaseFoldMap } from './case-fold-map'
+import type { ChannelModeChange, ChannelModeType } from './channel-modes'
 import type { RuntimeConfig, RuntimeInputConfig } from './config'
 import { resolveConfig } from './config'
 import type { IrcEvent } from './events'
@@ -15,11 +16,7 @@ import { registration } from './features/registration'
 import type { IrcCommand, IrcMessage } from './transport'
 import { Transport } from './transport'
 
-export interface ModeChange {
-  action: '+' | '-'
-  mode: string
-  argument?: string
-}
+export type ModeChange = ChannelModeChange
 
 // Features are applied in order. clientEvents must precede any feature that
 // subscribes to 'clientEvent', because EventEmitter delivers synchronously and
@@ -276,26 +273,37 @@ export class Runtime extends EventEmitter<RuntimeEvents> {
         continue
       }
 
-      // Prefix and type A/B modes always consume an argument.
-      if (prefixModes.includes(mode) || typeA.includes(mode) || typeB.includes(mode)) {
-        changes.push({ action, argument: args[argIndex] ?? '', mode })
+      let type: ChannelModeType = 'D'
+      if (prefixModes.includes(mode)) {
+        type = 'PREFIX'
+      } else if (typeA.includes(mode)) {
+        type = 'A'
+      } else if (typeB.includes(mode)) {
+        type = 'B'
+      } else if (typeC.includes(mode)) {
+        type = 'C'
+      }
+
+      // PREFIX and type A/B modes always consume an argument.
+      if (type === 'PREFIX' || type === 'A' || type === 'B') {
+        changes.push({ action, argument: args[argIndex] ?? '', mode, type })
         argIndex += 1
         continue
       }
 
       // Type C consumes an argument only when being set.
-      if (typeC.includes(mode)) {
+      if (type === 'C') {
         if (action === '+') {
-          changes.push({ action, argument: args[argIndex] ?? '', mode })
+          changes.push({ action, argument: args[argIndex] ?? '', mode, type })
           argIndex += 1
         } else {
-          changes.push({ action, mode })
+          changes.push({ action, mode, type })
         }
         continue
       }
 
       // Type D (and unknown/user modes) — no argument.
-      changes.push({ action, mode })
+      changes.push({ action, mode, type })
     }
 
     return changes

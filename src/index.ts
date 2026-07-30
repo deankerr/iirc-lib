@@ -2,6 +2,7 @@
 export * from './runtime'
 export type { RuntimeConfig, RuntimeInputConfig, SaslConfig } from './config'
 export type { ParsedCtcp } from './ctcp'
+export type { ChannelModes, ChannelModesJSON, ChannelModeType } from './channel-modes'
 export type { IrcEvent, IrcEventOf, UnknownIrcEvent } from './events'
 export type { Channel, ChannelMember, ChannelJSON, ChannelTopic } from './features/channel-tracker'
 export type { IsupportMap } from './features/isupport'

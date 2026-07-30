@@ -120,8 +120,8 @@ describe('channelTracker', () => {
       transport.receive(':server 366 bot #test :End of names')
 
       const channel = runtime.channels.get('#test')
-      expect(channel?.modes.get('o')?.has('alice')).toBe(true)
-      expect(channel?.modes.has('o')).toBe(true)
+      expect(channel?.modes.PREFIX.get('o')).toEqual(['alice'])
+      expect(channel?.modes.PREFIX.has('o')).toBe(true)
       expect([...(channel?.getMemberModes('alice') ?? [])]).toContain('o')
     })
 
@@ -130,7 +130,7 @@ describe('channelTracker', () => {
       transport.receive(':server 353 bot = #test :+alice')
       transport.receive(':server 366 bot #test :End of names')
 
-      expect(runtime.channels.get('#test')?.modes.get('v')?.has('alice')).toBe(true)
+      expect(runtime.channels.get('#test')?.modes.PREFIX.get('v')).toEqual(['alice'])
     })
 
     test('unprefixed nicks have no modes', () => {
@@ -173,20 +173,26 @@ describe('channelTracker', () => {
       transport.receive(':server 366 bot #test :End of names')
 
       // alice had op from first NAMES, should be gone after second
-      expect(runtime.channels.get('#test')?.modes.get('o')?.has('alice')).toBeFalsy()
+      expect(runtime.channels.get('#test')?.modes.PREFIX.has('o')).toBe(false)
     })
   })
 
+  // Protocol claims:
+  // - Type A holds a list; entries accumulate and the key disappears with the final entry.
+  // - Type B holds one setting and consumes its wire argument on both + and -.
+  // - Type C holds one setting, consuming an argument only on +.
+  // - Type D is a boolean and consumes no argument.
+  // - ISUPPORT assigns arbitrary mode letters to these stores; letters are not policy.
   describe('channel modes via MODE', () => {
     test('type D (boolean) mode set and unset', () => {
       const { runtime, transport } = createClient()
       transport.receive(':bot!u@h JOIN #test')
       transport.receive(':server MODE #test +m')
 
-      expect(runtime.channels.get('#test')?.modes.has('m')).toBe(true)
+      expect(runtime.channels.get('#test')?.modes.D.get('m')).toBe(true)
 
       transport.receive(':server MODE #test -m')
-      expect(runtime.channels.get('#test')?.modes.has('m')).toBe(false)
+      expect(runtime.channels.get('#test')?.modes.D.has('m')).toBe(false)
     })
 
     test('type B (setting) mode set and unset', () => {
@@ -194,10 +200,10 @@ describe('channelTracker', () => {
       transport.receive(':bot!u@h JOIN #test')
       transport.receive(':server MODE #test +k hunter2')
 
-      expect(runtime.channels.get('#test')?.modes.get('k')?.has('hunter2')).toBe(true)
+      expect(runtime.channels.get('#test')?.modes.B.get('k')).toBe('hunter2')
 
       transport.receive(':server MODE #test -k *')
-      expect(runtime.channels.get('#test')?.modes.has('k')).toBe(false)
+      expect(runtime.channels.get('#test')?.modes.B.has('k')).toBe(false)
     })
 
     test('type C (limit) mode set and unset', () => {
@@ -205,11 +211,11 @@ describe('channelTracker', () => {
       transport.receive(':bot!u@h JOIN #test')
       transport.receive(':server MODE #test +l 50')
 
-      expect(runtime.channels.get('#test')?.modes.get('l')?.has('50')).toBe(true)
+      expect(runtime.channels.get('#test')?.modes.C.get('l')).toBe('50')
 
       // type C has no argument when unset
       transport.receive(':server MODE #test -l')
-      expect(runtime.channels.get('#test')?.modes.has('l')).toBe(false)
+      expect(runtime.channels.get('#test')?.modes.C.has('l')).toBe(false)
     })
 
     test('type A (list) mode accumulates entries', () => {
@@ -218,10 +224,8 @@ describe('channelTracker', () => {
       transport.receive(':server MODE #test +b *!*@bad.host')
       transport.receive(':server MODE #test +b spammer!*@*')
 
-      const bans = runtime.channels.get('#test')?.modes.get('b')
-      expect(bans?.has('*!*@bad.host')).toBe(true)
-      expect(bans?.has('spammer!*@*')).toBe(true)
-      expect(bans?.size).toBe(2)
+      const bans = runtime.channels.get('#test')?.modes.A.get('b')
+      expect(bans).toEqual(['*!*@bad.host', 'spammer!*@*'])
     })
 
     test('type A (list) mode removes specific entry', () => {
@@ -231,9 +235,17 @@ describe('channelTracker', () => {
       transport.receive(':server MODE #test +b spammer!*@*')
       transport.receive(':server MODE #test -b *!*@bad.host')
 
-      const bans = runtime.channels.get('#test')?.modes.get('b')
-      expect(bans?.has('*!*@bad.host')).toBe(false)
-      expect(bans?.has('spammer!*@*')).toBe(true)
+      const bans = runtime.channels.get('#test')?.modes.A.get('b')
+      expect(bans).toEqual(['spammer!*@*'])
+    })
+
+    test('type A removes the store entry with its final list value', () => {
+      const { runtime, transport } = createClient()
+      transport.receive(':bot!u@h JOIN #test')
+      transport.receive(':server MODE #test +b *!*@bad.host')
+      transport.receive(':server MODE #test -b *!*@bad.host')
+
+      expect(runtime.channels.get('#test')?.modes.A.has('b')).toBe(false)
     })
 
     test('multiple modes in one modestring', () => {
@@ -243,9 +255,9 @@ describe('channelTracker', () => {
       transport.receive(':server MODE #test +mbs *!*@bad.host')
 
       const channel = runtime.channels.get('#test')
-      expect(channel?.modes.has('m')).toBe(true)
-      expect(channel?.modes.get('b')?.has('*!*@bad.host')).toBe(true)
-      expect(channel?.modes.has('s')).toBe(true)
+      expect(channel?.modes.D.get('m')).toBe(true)
+      expect(channel?.modes.A.get('b')).toEqual(['*!*@bad.host'])
+      expect(channel?.modes.D.get('s')).toBe(true)
     })
 
     test('mixed add/remove in one modestring', () => {
@@ -256,9 +268,9 @@ describe('channelTracker', () => {
       transport.receive(':server MODE #test -m+k-n hunter2')
 
       const channel = runtime.channels.get('#test')
-      expect(channel?.modes.has('m')).toBe(false)
-      expect(channel?.modes.get('k')?.has('hunter2')).toBe(true)
-      expect(channel?.modes.has('n')).toBe(false)
+      expect(channel?.modes.D.has('m')).toBe(false)
+      expect(channel?.modes.B.get('k')).toBe('hunter2')
+      expect(channel?.modes.D.has('n')).toBe(false)
     })
 
     test('user MODE message is ignored', () => {
@@ -268,8 +280,26 @@ describe('channelTracker', () => {
       // No channel should have been created
       expect(runtime.channels.get('bot')).toBeUndefined()
     })
+
+    test('ISUPPORT routes arbitrary mode letters into their advertised stores', () => {
+      const { runtime, transport } = createClient()
+      transport.receive(':server 005 bot CHANMODES=x,y,z,w PREFIX=(p)! :supported')
+      transport.receive(':bot!u@h JOIN #test')
+      transport.receive(':server MODE #test +xyzwp list setting conditional alice')
+
+      const modes = runtime.channels.get('#test')?.modes
+      expect(modes?.A.get('x')).toEqual(['list'])
+      expect(modes?.B.get('y')).toBe('setting')
+      expect(modes?.C.get('z')).toBe('conditional')
+      expect(modes?.D.get('w')).toBe(true)
+      expect(modes?.PREFIX.get('p')).toEqual(['alice'])
+    })
   })
 
+  // Membership-prefix claims:
+  // - PREFIX values are IRC identifiers, not opaque channel-mode arguments.
+  // - Departure removes only that member and deletes an empty PREFIX entry.
+  // - NICK and CASEMAPPING apply to PREFIX values without touching types A-D.
   describe('prefix (member) modes via MODE', () => {
     test('+o gives op to member', () => {
       const { runtime, transport } = createClient()
@@ -277,7 +307,7 @@ describe('channelTracker', () => {
       transport.receive(':server MODE #test +o alice')
 
       const channel = runtime.channels.get('#test')
-      expect(channel?.modes.get('o')?.has('alice')).toBe(true)
+      expect(channel?.modes.PREFIX.get('o')).toEqual(['alice'])
       expect([...(channel?.getMemberModes('alice') ?? [])]).toContain('o')
     })
 
@@ -287,7 +317,7 @@ describe('channelTracker', () => {
       transport.receive(':server MODE #test +o alice')
       transport.receive(':server MODE #test -o alice')
 
-      expect(runtime.channels.get('#test')?.modes.get('o')?.has('alice')).toBeFalsy()
+      expect(runtime.channels.get('#test')?.modes.PREFIX.has('o')).toBe(false)
     })
 
     test('getMemberModes returns all prefix modes for a member', () => {
@@ -301,22 +331,41 @@ describe('channelTracker', () => {
       expect(modes?.has('v')).toBe(true)
     })
 
-    test('member modes are cleaned up on PART', () => {
+    test('PART removes the final holder and the empty PREFIX entry', () => {
       const { runtime, transport } = createClient()
       transport.receive(':alice!u@h JOIN #test')
       transport.receive(':server MODE #test +o alice')
       transport.receive(':alice!u@h PART #test')
 
-      expect(runtime.channels.get('#test')?.modes.get('o')?.has('alice')).toBeFalsy()
+      expect(runtime.channels.get('#test')?.modes.PREFIX.has('o')).toBe(false)
     })
 
-    test('member modes are cleaned up on QUIT', () => {
+    test('removing one holder preserves the other PREFIX holders', () => {
       const { runtime, transport } = createClient()
       transport.receive(':alice!u@h JOIN #test')
-      transport.receive(':server MODE #test +o alice')
-      transport.receive(':alice!u@h QUIT')
+      transport.receive(':bob!u@h JOIN #test')
+      transport.receive(':server MODE #test +oo alice bob')
+      transport.receive(':alice!u@h PART #test')
 
-      expect(runtime.channels.get('#test')?.modes.get('o')?.has('alice')).toBeFalsy()
+      expect(runtime.channels.get('#test')?.modes.PREFIX.get('o')).toEqual(['bob'])
+    })
+
+    test('PREFIX membership follows IRC case mapping on removal', () => {
+      const { runtime, transport } = createClient()
+      transport.receive(':Alice!u@h JOIN #test')
+      transport.receive(':server MODE #test +o Alice')
+      transport.receive(':alice!u@h PART #test')
+
+      expect(runtime.channels.get('#test')?.modes.PREFIX.has('o')).toBe(false)
+    })
+
+    test('member removal does not alter opaque type A entries', () => {
+      const { runtime, transport } = createClient()
+      transport.receive(':alice!u@h JOIN #test')
+      transport.receive(':server MODE #test +b alice')
+      transport.receive(':alice!u@h PART #test')
+
+      expect(runtime.channels.get('#test')?.modes.A.get('b')).toEqual(['alice'])
     })
 
     test('member modes follow NICK rename', () => {
@@ -326,8 +375,7 @@ describe('channelTracker', () => {
       transport.receive(':alice!u@h NICK ael')
 
       const channel = runtime.channels.get('#test')
-      expect(channel?.modes.get('o')?.has('alice')).toBeFalsy()
-      expect(channel?.modes.get('o')?.has('ael')).toBe(true)
+      expect(channel?.modes.PREFIX.get('o')).toEqual(['ael'])
     })
   })
 
@@ -338,9 +386,9 @@ describe('channelTracker', () => {
       transport.receive(':server 324 bot #test +nst')
 
       const channel = runtime.channels.get('#test')
-      expect(channel?.modes.has('n')).toBe(true)
-      expect(channel?.modes.has('s')).toBe(true)
-      expect(channel?.modes.has('t')).toBe(true)
+      expect(channel?.modes.D.get('n')).toBe(true)
+      expect(channel?.modes.D.get('s')).toBe(true)
+      expect(channel?.modes.D.get('t')).toBe(true)
     })
 
     test('sets mode with argument from query response', () => {
@@ -348,7 +396,7 @@ describe('channelTracker', () => {
       transport.receive(':bot!u@h JOIN #test')
       transport.receive(':server 324 bot #test +nk hunter2')
 
-      expect(runtime.channels.get('#test')?.modes.get('k')?.has('hunter2')).toBe(true)
+      expect(runtime.channels.get('#test')?.modes.B.get('k')).toBe('hunter2')
     })
   })
 

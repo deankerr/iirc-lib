@@ -246,7 +246,13 @@ describe('Runtime', () => {
         {
           joined: true,
           members: ['bot', 'ann'],
-          modes: { o: ['bot'], v: ['ann'] },
+          modes: {
+            A: {},
+            B: {},
+            C: {},
+            D: {},
+            PREFIX: { o: ['bot'], v: ['ann'] },
+          },
           name: '#dev',
         },
       ],
@@ -270,7 +276,13 @@ describe('Runtime', () => {
       {
         joined: true,
         members: ['bot', 'ann'],
-        modes: { o: ['bot'], v: ['ann'] },
+        modes: {
+          A: {},
+          B: {},
+          C: {},
+          D: {},
+          PREFIX: { o: ['bot'], v: ['ann'] },
+        },
         name: '#dev',
       },
     ])

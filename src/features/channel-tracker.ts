@@ -1,4 +1,6 @@
 import { CaseFoldMap } from '../case-fold-map'
+import { ChannelModes } from '../channel-modes'
+import type { ChannelModesJSON } from '../channel-modes'
 import type { Runtime } from '../runtime'
 
 export interface ChannelTopic {
@@ -11,24 +13,18 @@ export interface ChannelMember {
   nick: string
 }
 
-// One channel as plain JSON-safe data. Member modes are not repeated here:
-// they are already in `modes`, keyed by mode letter, and duplicating them
-// would be two records of one fact.
 export interface ChannelJSON {
   createdAt?: string
   joined: boolean
   members: string[]
-  modes: Record<string, string[]>
+  modes: ChannelModesJSON
   name: string
   topic?: ChannelTopic
 }
 
 export class Channel {
   readonly members: CaseFoldMap<ChannelMember>
-  // Each mode letter maps to the set of arguments associated with it.
-  // Boolean modes (type D) use an empty set; list modes (type A) and prefix
-  // modes accumulate entries; setting modes (type B/C) hold a single entry.
-  readonly modes = new Map<string, Set<string>>()
+  readonly modes: ChannelModes
   readonly name: string
 
   joined = false
@@ -37,50 +33,12 @@ export class Channel {
 
   constructor(name: string, caseFold: (key: string) => string) {
     this.members = new CaseFoldMap(caseFold)
+    this.modes = new ChannelModes(caseFold)
     this.name = name
   }
 
-  addMode(mode: string, argument?: string): void {
-    if (argument === undefined) {
-      if (!this.modes.has(mode)) {
-        this.modes.set(mode, new Set())
-      }
-      return
-    }
-
-    let args = this.modes.get(mode)
-    if (args === undefined) {
-      args = new Set()
-      this.modes.set(mode, args)
-    }
-    args.add(argument)
-  }
-
-  removeMode(mode: string, argument?: string): void {
-    if (argument === undefined) {
-      this.modes.delete(mode)
-      return
-    }
-
-    const args = this.modes.get(mode)
-    if (args !== undefined) {
-      args.delete(argument)
-      if (args.size === 0) {
-        this.modes.delete(mode)
-      }
-    }
-  }
-
-  // Returns the set of mode letters this nick holds as an argument (prefix modes).
-  // Scans all mode entries; fine given the small number of active mode letters.
   getMemberModes(nick: string): Set<string> {
-    const result = new Set<string>()
-    for (const [mode, args] of this.modes) {
-      if (args.has(nick)) {
-        result.add(mode)
-      }
-    }
-    return result
+    return this.modes.getMemberModes(nick)
   }
 
   addMember(nick: string): void {
@@ -89,10 +47,7 @@ export class Channel {
 
   removeMember(nick: string): void {
     this.members.delete(nick)
-    // Clean up any prefix mode entries for this nick.
-    for (const args of this.modes.values()) {
-      args.delete(nick)
-    }
+    this.modes.removeMember(nick)
   }
 
   toJSON(): ChannelJSON {
@@ -100,7 +55,7 @@ export class Channel {
       ...(this.createdAt !== undefined && { createdAt: this.createdAt }),
       joined: this.joined,
       members: [...this.members.keys()],
-      modes: Object.fromEntries([...this.modes].map(([mode, args]) => [mode, [...args]])),
+      modes: this.modes.toJSON(),
       name: this.name,
       ...(this.topic !== undefined && { topic: { ...this.topic } }),
     }
@@ -114,13 +69,7 @@ export class Channel {
     this.members.delete(previousNick)
     this.members.set(nick, { nick })
 
-    // Update the nick in any mode argument sets (covers prefix modes).
-    for (const args of this.modes.values()) {
-      if (args.has(previousNick)) {
-        args.delete(previousNick)
-        args.add(nick)
-      }
-    }
+    this.modes.renameMember(previousNick, nick)
   }
 }
 
@@ -148,15 +97,10 @@ export function channelTracker(runtime: Runtime): void {
 
       // Replace members and their prefix modes atomically.
       channel.members.clear()
-      for (const prefixMode of runtime.isupport.prefixModes) {
-        channel.modes.delete(prefixMode)
-      }
+      channel.modes.replacePrefixes(pending)
 
-      for (const { nick, mode } of pending) {
+      for (const { nick } of pending) {
         channel.addMember(nick)
-        if (mode !== undefined) {
-          channel.addMode(mode, nick)
-        }
       }
 
       pendingNames.delete(event.channel)
@@ -168,31 +112,16 @@ export function channelTracker(runtime: Runtime): void {
         return
       }
       const channel = ensureChannel(event.target)
-      const [, typeB] = runtime.isupport.chanModeGroups
       for (const change of runtime.parseModeChanges(event.modestring, event.modeArgs)) {
-        if (change.action === '+') {
-          channel.addMode(change.mode, change.argument)
-        } else if (typeB.includes(change.mode)) {
-          // Type B remove argument is a protocol artifact — always clear the whole setting.
-          channel.removeMode(change.mode)
-        } else {
-          channel.removeMode(change.mode, change.argument)
-        }
+        channel.modes.apply(change)
       }
       return
     }
 
     if (event.command === 'RPL_CHANNELMODEIS') {
       const channel = ensureChannel(event.channel)
-      const [, typeB] = runtime.isupport.chanModeGroups
       for (const change of runtime.parseModeChanges(event.modestring, event.modeArgs)) {
-        if (change.action === '+') {
-          channel.addMode(change.mode, change.argument)
-        } else if (typeB.includes(change.mode)) {
-          channel.removeMode(change.mode)
-        } else {
-          channel.removeMode(change.mode, change.argument)
-        }
+        channel.modes.apply(change)
       }
       return
     }
