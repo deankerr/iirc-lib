@@ -11,6 +11,12 @@ import { parseArgs } from 'node:util'
 
 const TAG_PREFIX = 'v'
 
+// Command failures are reported to a human, and npm in particular writes a long
+// multi-line error. One line is enough to say which check could not run.
+function firstLine(text: string): string {
+  return text.split('\n')[0] ?? 'no detail'
+}
+
 // Every failure here is a reason not to tag. Collect them all before reporting,
 // so one run tells you everything to fix rather than one problem per attempt.
 interface Preflight {
@@ -19,13 +25,23 @@ interface Preflight {
   readonly version: string
 }
 
-// Thin wrapper over Bun.$ that returns trimmed stdout and never throws. A failed
-// command is a fact to check, not an exception to handle.
-async function run(command: string[]): Promise<{ ok: boolean; output: string }> {
+interface CommandResult {
+  readonly error: string
+  readonly ok: boolean
+  readonly output: string
+}
+
+// Thin wrapper over Bun.spawn that never throws. A failed command is a fact to
+// check, not an exception to handle — and every caller below must read that
+// fact. A check that cannot run has to block the release, not silently pass it.
+async function run(command: string[]): Promise<CommandResult> {
   const proc = Bun.spawn(command, { stderr: 'pipe', stdout: 'pipe' })
-  const output = await new Response(proc.stdout).text()
+  const [output, error] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ])
   const code = await proc.exited
-  return { ok: code === 0, output: output.trim() }
+  return { error: error.trim(), ok: code === 0, output: output.trim() }
 }
 
 // The version being released is whatever package.json says. The tag is derived
@@ -57,7 +73,12 @@ async function preflight(): Promise<Preflight> {
   const tag = `${TAG_PREFIX}${version}`
 
   // Refresh remote refs first: every comparison below is against the remote.
-  await run(['git', 'fetch', '--tags', '--prune'])
+  // A failed fetch leaves those comparisons reading stale cached refs, which
+  // would pass while describing state that no longer exists.
+  const fetched = await run(['git', 'fetch', '--tags', '--prune'])
+  if (!fetched.ok) {
+    problems.push('Could not fetch from origin, so remote state cannot be trusted.')
+  }
 
   // The tag must go on main. This is the check that would have caught tagging a
   // release branch before its squash merge rewrote the commit.
@@ -68,33 +89,50 @@ async function preflight(): Promise<Preflight> {
 
   // Uncommitted work means the tagged commit is not what you are looking at.
   const dirty = await run(['git', 'status', '--porcelain'])
-  if (dirty.output !== '') {
-    problems.push('Working tree is not clean. Commit or stash first.')
+  if (dirty.ok) {
+    if (dirty.output !== '') {
+      problems.push('Working tree is not clean. Commit or stash first.')
+    }
+  } else {
+    problems.push('Could not read the working tree state.')
   }
 
   // Local main must equal origin/main. Ahead means CI never saw this commit;
   // behind means you are tagging something older than what is released from.
   const local = await run(['git', 'rev-parse', 'HEAD'])
   const remote = await run(['git', 'rev-parse', 'origin/main'])
-  if (local.output !== remote.output) {
-    problems.push('Local main and origin/main differ. Push or pull so they match.')
+  if (local.ok && remote.ok) {
+    if (local.output !== remote.output) {
+      problems.push('Local main and origin/main differ. Push or pull so they match.')
+    }
+  } else {
+    problems.push('Could not resolve HEAD or origin/main.')
   }
 
   // A tag is meant to be immutable, and the tag ruleset blocks moving one.
   const existing = await run(['git', 'ls-remote', '--tags', 'origin', `refs/tags/${tag}`])
-  if (existing.output !== '') {
-    problems.push(`Tag ${tag} already exists on origin. Bump the version instead of reusing it.`)
+  if (existing.ok) {
+    if (existing.output !== '') {
+      problems.push(`Tag ${tag} already exists on origin. Bump the version instead of reusing it.`)
+    }
+  } else {
+    problems.push(`Could not ask origin whether ${tag} exists.`)
   }
 
-  // The registry is the real source of truth for what has shipped.
+  // The registry is the real source of truth for what has shipped. npm exits
+  // non-zero both for "no such version" and for a registry or network failure.
+  // Only the first means publishing is safe, so tell the two apart.
   const published = await run(['npm', 'view', `${name}@${version}`, 'version'])
   if (published.ok) {
     problems.push(`${name}@${version} is already on npm. Bump the version in package.json.`)
+  } else if (!published.error.includes('E404')) {
+    problems.push(`Could not ask npm about ${name}@${version}: ${firstLine(published.error)}`)
   }
 
   // The workflow builds release notes from this section. An absent section
   // produces an empty GitHub release, which is only noticed after publishing.
-  const changelog = await Bun.file('CHANGELOG.md').text()
+  const changelogFile = Bun.file('CHANGELOG.md')
+  const changelog = (await changelogFile.exists()) ? await changelogFile.text() : ''
   if (!changelog.includes(`## [${version}]`)) {
     problems.push(`CHANGELOG.md has no "## [${version}]" section.`)
   }
@@ -116,8 +154,12 @@ async function preflight(): Promise<Preflight> {
     '--jq',
     '.[0].conclusion',
   ])
-  if (conclusion.output !== 'success') {
-    problems.push(`CI on this commit is "${conclusion.output || 'missing'}", not success.`)
+  if (conclusion.ok) {
+    if (conclusion.output !== 'success') {
+      problems.push(`CI on this commit is "${conclusion.output || 'missing'}", not success.`)
+    }
+  } else {
+    problems.push('Could not read the CI result for this commit from GitHub.')
   }
 
   return { commit: local.output, problems, version }

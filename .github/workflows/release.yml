@@ -63,11 +63,18 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if npm view "$(node -p 'require("./package.json").name')@$VERSION" version >/dev/null 2>&1; then
+          name="$(node -p 'require("./package.json").name')"
+          # npm exits non-zero both for "no such version" and for a registry or
+          # network failure. Only E404 proves the version is absent, so anything
+          # else stops the job rather than being read as "safe to publish".
+          if output="$(npm view "$name@$VERSION" version 2>&1)"; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "::notice::$VERSION is already on the registry; skipping publish."
-          else
+          elif printf '%s' "$output" | grep -q 'E404'; then
             echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Could not determine whether $VERSION is published: $output"
+            exit 1
           fi
 
       # --ignore-scripts because the steps above already did what prepack and
