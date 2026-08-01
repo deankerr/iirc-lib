@@ -21,6 +21,12 @@ jobs:
         with:
           bun-version-file: package.json
 
+      # Node is not the test runtime, but the package checks below shell out to it.
+      # node-version-file reads .node-version, the same file fnm reads locally.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
       - run: bun install --frozen-lockfile
 
       # Same gates as prepublishOnly: format/lint/type check, then tests.
@@ -29,3 +35,7 @@ jobs:
 
       # Confirm the package builds; prepack runs this at publish time.
       - run: bun run build
+
+      # Validate the shipped package itself: publint checks the manifest fields,
+      # attw checks that both entry points resolve to types for a consumer.
+      - run: bun run lint:package
