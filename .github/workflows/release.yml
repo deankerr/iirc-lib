@@ -55,14 +55,38 @@ jobs:
       - run: bun run build
       - run: bun run lint:package
 
+      # A tag can be re-pushed, and a failed run can be retried. Publishing is
+      # not repeatable, so ask the registry what already exists rather than
+      # letting npm fail the job on a version conflict.
+      - name: Check whether this version is already published
+        id: published
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          name="$(node -p 'require("./package.json").name')"
+          # npm exits non-zero both for "no such version" and for a registry or
+          # network failure. Only E404 proves the version is absent, so anything
+          # else stops the job rather than being read as "safe to publish".
+          if output="$(npm view "$name@$VERSION" version 2>&1)"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$VERSION is already on the registry; skipping publish."
+          elif printf '%s' "$output" | grep -q 'E404'; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Could not determine whether $VERSION is published: $output"
+            exit 1
+          fi
+
       # --ignore-scripts because the steps above already did what prepack and
       # prepublishOnly do; dist is built and the gates have passed. Provenance is
       # generated automatically for a public package published this way.
-      - run: npm publish --ignore-scripts
+      - if: steps.published.outputs.exists == 'false'
+        run: npm publish --ignore-scripts
 
       # The release notes come from the changelog section for this version, so
-      # there is one source of truth for what changed.
-      - name: Create the GitHub release
+      # there is one source of truth for what changed. Like the publish step,
+      # this tolerates a re-run: an existing release is updated, not duplicated.
+      - name: Create or update the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
@@ -72,6 +96,12 @@ jobs:
             collecting && /^## / { exit }
             collecting { print }
           ' CHANGELOG.md > release-notes.md
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
-            --notes-file release-notes.md
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" \
+              --target "$GITHUB_SHA" \
+              --notes-file release-notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file release-notes.md
+          fi

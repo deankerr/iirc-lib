@@ -49,6 +49,7 @@
     "prepack": "bun run build",
     "prepare": "bunx lefthook install",
     "prepublishOnly": "bun run check && bun test",
+    "release": "bun run scripts/release.ts",
     "test": "bun test"
   },
   "devDependencies": {
