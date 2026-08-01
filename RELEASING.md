@@ -55,16 +55,48 @@ It:
 Steps 3 and 4 are idempotent: an already-published version is skipped, and an
 existing release is updated rather than duplicated. A re-run is safe.
 
+## Never move a published tag
+
+Once a version is on npm, its tag is frozen. This is not a style preference.
+
+npm attaches a signed SLSA provenance attestation at publish time, and that
+attestation names both the tag and the commit it resolved to:
+
+```
+ref:       refs/tags/v0.2.0
+gitCommit: 79a6d561108cc4ef0ac498b6d0cfe5fe92fa81a2
+```
+
+That binding is signed and cannot be updated. Move the tag and anyone resolving
+`refs/tags/v0.2.0` gets a commit whose digest contradicts the attestation, so
+provenance verification fails.
+
+The second-order effect is worse. A commit that a tag was moved _off_ may not be
+on any branch, and the tag was the only thing keeping it reachable. Moving the
+tag orphans it, and the attested source is eventually garbage-collected — a
+signed attestation pointing at a commit nobody can fetch.
+
+If a tag is wrong, the fix is the next version, never a force-push.
+
 ## Why the script exists
 
 `v0.2.0` was tagged by hand on the release branch instead of on merged `main`.
-The published package was correct — the trees were identical — but the tag
-pointed at a commit outside the repository history, so `git describe` could not
-find it and later compare links would have replayed the whole diff.
+Squash merge rewrote the commit, so the tag landed outside the repository
+history. The published package was correct — every shipped file matches — but
+`git describe` on `main` cannot find the tag.
 
-Nothing at publish time can catch this: by then the tag already exists, and the
-workflow only sees the commit it was handed. The check has to happen before the
-tag is created, which is what the script is for.
+It was left in place, for the reason above. The tag is the only ref holding the
+attested commit, so correcting the cosmetic problem would have broken the
+verifiable one. Two consequences remain, both harmless:
+
+- `git describe --tags` on `main` does not find `v0.2.0`.
+- A `v0.2.0...v0.3.0` compare link would replay the whole 0.2.0 diff, because
+  the merge base falls back behind it. Write the next changelog link against
+  `901ae69` — the squash commit of the 0.2.0 release — instead.
+
+Nothing at publish time can catch a misplaced tag: by then the tag exists, and
+the workflow only sees the commit it was handed. The check has to happen before
+the tag is created, which is what the script is for.
 
 ## First-time setup
 
