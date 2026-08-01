@@ -1,0 +1,77 @@
+name: Release
+
+# A pushed v* tag is the only trigger. Version bumps and the changelog land on
+# main through a normal PR first, so the tag always points at a reviewed commit.
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Needed to create the GitHub release.
+      contents: write
+      # Needed for npm trusted publishing: GitHub mints the OIDC token that npm
+      # exchanges for a short-lived credential. No NPM_TOKEN is stored.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or later. Node 24 ships an older npm.
+      - run: npm install -g npm@latest
+
+      - run: bun install --frozen-lockfile
+
+      # Refuse to publish a version the tag does not name. This is the guard that
+      # catches the common mistake: tagging without bumping, or bumping without
+      # retagging. It must run before anything is built or published.
+      - name: Check the tag matches package.json
+        id: version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version="$(node -p 'require("./package.json").version')"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "Tag $GITHUB_REF_NAME wants $tag_version, package.json has $pkg_version." >&2
+            exit 1
+          fi
+          echo "version=$pkg_version" >> "$GITHUB_OUTPUT"
+
+      # The same gates as CI. CI already ran them on main, but the tag is a
+      # distinct ref and nothing else re-checks the exact commit being published.
+      - run: bun run check
+      - run: bun test
+      - run: bun run build
+      - run: bun run lint:package
+
+      # --ignore-scripts because the steps above already did what prepack and
+      # prepublishOnly do; dist is built and the gates have passed. Provenance is
+      # generated automatically for a public package published this way.
+      - run: npm publish --ignore-scripts
+
+      # The release notes come from the changelog section for this version, so
+      # there is one source of truth for what changed.
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          awk -v v="## [$VERSION]" '
+            index($0, v) == 1 { collecting = 1; next }
+            collecting && /^## / { exit }
+            collecting { print }
+          ' CHANGELOG.md > release-notes.md
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file release-notes.md

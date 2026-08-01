@@ -1,6 +1,6 @@
 {
   "name": "@deankerr/iirc-lib",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Stream-based IRC client library — wire framing, typed events, registration, CAP negotiation, SASL, and channel state. You provide the transport.",
   "keywords": [
     "irc",
@@ -21,6 +21,7 @@
   "files": [
     "dist",
     "src",
+    "CHANGELOG.md",
     "README.md"
   ],
   "type": "module",
@@ -44,25 +45,28 @@
     "build": "tsdown",
     "check": "ultracite check --type-aware --type-check",
     "fix": "ultracite fix --type-aware --type-check",
+    "lint:package": "publint --strict && attw --pack . --profile esm-only",
     "prepack": "bun run build",
     "prepare": "bunx lefthook install",
     "prepublishOnly": "bun run check && bun test",
     "test": "bun test"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
     "@types/bun": "1.3.14",
-    "@types/node": "22.20.1",
+    "@types/node": "24.13.3",
     "commander": "14.0.3",
     "lefthook": "2.1.9",
     "oxfmt": "0.57.0",
     "oxlint": "1.72.0",
     "oxlint-tsgolint": "0.24.0",
+    "publint": "0.3.22",
     "tsdown": "0.22.0",
     "typescript": "6.0.3",
     "ultracite": "7.8.4"
   },
   "peerDependencies": {
-    "@types/node": ">=22"
+    "@types/node": ">=24"
   },
   "peerDependenciesMeta": {
     "@types/node": {
@@ -70,10 +74,10 @@
     }
   },
   "overrides": {
-    "@types/node": "22.20.1"
+    "@types/node": "24.13.3"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "packageManager": "bun@1.3.14"
 }
