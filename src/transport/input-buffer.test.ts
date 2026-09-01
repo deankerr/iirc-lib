@@ -144,6 +144,7 @@ describe('InputBuffer', () => {
   test('never accumulates the bytes of an unterminated oversized line', () => {
     const buffer = new InputBuffer()
     buffer.push(bytes(OVERSIZED))
+    // oxlint-disable-next-line unicorn/prefer-single-call not an Array
     buffer.push(bytes(OVERSIZED))
 
     // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion

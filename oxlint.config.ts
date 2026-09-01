@@ -19,6 +19,10 @@ export default defineConfig({
     '.claude/**',
     '**/components/ui/**',
   ],
+  options: {
+    typeAware: true,
+    typeCheck: true,
+  },
   overrides: [
     {
       files: ['src/events/**'],
@@ -38,6 +42,7 @@ export default defineConfig({
     'func-style': 'off',
     'no-inline-comments': 'off',
     'no-use-before-define': 'off',
+    'no-void': 'off',
     'no-warning-comments': 'off',
     'unicorn/consistent-function-scoping': 'off',
     'unicorn/prefer-event-target': 'off',
